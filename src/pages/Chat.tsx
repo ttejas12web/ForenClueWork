@@ -27,6 +27,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { formatApiUrl } from '../lib/api';
 
 interface ChatMember {
   id: number;
@@ -185,27 +186,37 @@ export const Chat = () => {
   }, [messages]);
 
   // Fetch groups and initialize direct chat if requested
-  const fetchGroups = async (autoSelectFirstOnDesktop = false) => {
+  const fetchGroups = async (autoSelectFirstOnDesktop = false, signal?: AbortSignal) => {
+    if (!token) {
+      setIsLoadingGroups(false);
+      return;
+    }
+
     try {
-      const res = await fetch('/api/chat/groups', {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await fetch(formatApiUrl('/api/chat/groups'), {
+        headers: { Authorization: `Bearer ${token}` },
+        signal
       });
 
       let loadedGroups: ChatGroup[] = [];
       if (res.ok) {
-        loadedGroups = await res.json();
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          loadedGroups = data;
+        }
       }
 
       // If user requested direct chat with a mentor / member (via ?directUser=...)
       if (targetDirectUser) {
         try {
-          const directRes = await fetch('/api/chat/direct', {
+          const directRes = await fetch(formatApiUrl('/api/chat/direct'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`
             },
-            body: JSON.stringify({ targetForenclueId: targetDirectUser })
+            body: JSON.stringify({ targetForenclueId: targetDirectUser }),
+            signal
           });
 
           if (directRes.ok) {
@@ -221,8 +232,10 @@ export const Chat = () => {
             setIsLoadingGroups(false);
             return;
           }
-        } catch (err) {
-          console.error('Failed to open direct mentor channel:', err);
+        } catch (err: any) {
+          if (err?.name !== 'AbortError') {
+            console.warn('Failed to open direct mentor channel:', err?.message || err);
+          }
         }
       }
 
@@ -248,18 +261,22 @@ export const Chat = () => {
       } else {
         setActiveGroup(null);
       }
-    } catch (err) {
-      console.error('Failed to load chat groups', err);
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.warn('Failed to load chat groups:', err?.message || err);
+      }
     } finally {
       setIsLoadingGroups(false);
     }
   };
 
   // Fetch all users for membership picker
-  const fetchUsers = async () => {
+  const fetchUsers = async (signal?: AbortSignal) => {
+    if (!token) return;
     try {
-      const res = await fetch('/api/users', {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await fetch(formatApiUrl('/api/users'), {
+        headers: { Authorization: `Bearer ${token}` },
+        signal
       });
       if (res.ok) {
         const data = await res.json();
@@ -267,15 +284,20 @@ export const Chat = () => {
           setAllUsers(data);
         }
       }
-    } catch (err) {
-      console.error('Failed to load users', err);
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.warn('Failed to load users:', err?.message || err);
+      }
     }
   };
 
   // Initial load
   useEffect(() => {
-    fetchGroups(true);
-    fetchUsers();
+    if (!token) return;
+    const abortController = new AbortController();
+    fetchGroups(true, abortController.signal);
+    fetchUsers(abortController.signal);
+    return () => abortController.abort();
   }, [token]);
 
   // Pre-fill mention if provided in URL
@@ -286,33 +308,49 @@ export const Chat = () => {
   }, [targetMention]);
 
   // Fetch messages for active group
-  const fetchMessages = async (groupId: number) => {
+  const fetchMessages = async (groupId: number, signal?: AbortSignal) => {
+    if (!token || !groupId || isNaN(groupId) || groupId <= 0) return;
     try {
-      const res = await fetch(`/api/chat/groups/${groupId}/messages`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await fetch(formatApiUrl(`/api/chat/groups/${groupId}/messages`), {
+        headers: { Authorization: `Bearer ${token}` },
+        signal
       });
       if (res.ok) {
         const data = await res.json();
-        setMessages(data);
+        if (Array.isArray(data)) {
+          setMessages(data);
+        }
+      } else if (res.status === 403) {
+        // User not a member or group removed
+        setMessages([]);
       }
-    } catch (err) {
-      console.error('Failed to load messages', err);
+    } catch (err: any) {
+      // Gracefully ignore aborts on unmount or active group change
+      if (err?.name === 'AbortError') return;
+      console.warn('Unable to load messages:', err?.message || err);
     }
   };
 
   // When active group changes, fetch messages and start polling
   useEffect(() => {
-    if (!activeGroup) {
+    if (!activeGroup?.id || !token) {
       setMessages([]);
       return;
     }
-    fetchMessages(activeGroup.id);
+
+    const abortController = new AbortController();
+    const currentGroupId = activeGroup.id;
+
+    fetchMessages(currentGroupId, abortController.signal);
 
     const interval = setInterval(() => {
-      fetchMessages(activeGroup.id);
+      fetchMessages(currentGroupId);
     }, 3000);
 
-    return () => clearInterval(interval);
+    return () => {
+      abortController.abort();
+      clearInterval(interval);
+    };
   }, [activeGroup?.id, token]);
 
   // Send message
@@ -329,7 +367,7 @@ export const Chat = () => {
       if (selectedFile) {
         const formData = new FormData();
         formData.append('file', selectedFile);
-        const uploadRes = await fetch('/api/upload', {
+        const uploadRes = await fetch(formatApiUrl('/api/upload'), {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: formData
@@ -341,7 +379,7 @@ export const Chat = () => {
         }
       }
 
-      const res = await fetch(`/api/chat/groups/${activeGroup.id}/messages`, {
+      const res = await fetch(formatApiUrl(`/api/chat/groups/${activeGroup.id}/messages`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -489,7 +527,7 @@ export const Chat = () => {
     }
 
     try {
-      const res = await fetch('/api/chat/groups', {
+      const res = await fetch(formatApiUrl('/api/chat/groups'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -531,7 +569,7 @@ export const Chat = () => {
     setAddMemberError('');
 
     try {
-      const res = await fetch(`/api/chat/groups/${activeGroup.id}/members`, {
+      const res = await fetch(formatApiUrl(`/api/chat/groups/${activeGroup.id}/members`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -565,7 +603,7 @@ export const Chat = () => {
     }
 
     try {
-      const res = await fetch(`/api/chat/groups/${activeGroup.id}/members/${targetUserId}`, {
+      const res = await fetch(formatApiUrl(`/api/chat/groups/${activeGroup.id}/members/${targetUserId}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -594,7 +632,7 @@ export const Chat = () => {
     }
 
     try {
-      const res = await fetch(`/api/chat/groups/${activeGroup.id}`, {
+      const res = await fetch(formatApiUrl(`/api/chat/groups/${activeGroup.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -625,7 +663,7 @@ export const Chat = () => {
     }
 
     try {
-      const res = await fetch(`/api/chat/groups/${groupId}`, {
+      const res = await fetch(formatApiUrl(`/api/chat/groups/${groupId}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });

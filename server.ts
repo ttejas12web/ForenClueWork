@@ -14,25 +14,50 @@ const app = express();
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'forenclue-super-secret-key-2026';
 
+// Robust CORS for web requests from any domain/subdomain including work.forenclue.in
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      'https://work.forenclue.in',
-      'https://ais-dev-dez7rzztl5zmxpysmmxlst-642747300953.asia-southeast1.run.app',
-      'https://ais-pre-dez7rzztl5zmxpysmmxlst-642747300953.asia-southeast1.run.app'
-    ];
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.forenclue.in') || origin.endsWith('.run.app')) {
-      callback(null, true);
-    } else {
-      callback(null, true);
-    }
-  },
+  origin: true,
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'Cache-Control']
 }));
-app.options('*', cors());
-app.use(express.json({ limit: '10mb' }));
+
+app.options('*', (req, res) => {
+  res.sendStatus(200);
+});
+
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+
+// Health check endpoints
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    service: 'ForenClue Forensic Intelligence Workspace Backend', 
+    timestamp: new Date().toISOString() 
+  });
+});
+
+app.get('/api/ping', (req, res) => {
+  res.send('pong');
+});
 
 // Request logger for debugging
 app.use((req, res, next) => {
@@ -1573,6 +1598,11 @@ async function seedInitialData() {
 // Start server
 async function startServer() {
   await seedInitialData();
+
+  // Return JSON 404 for any unmatched API endpoints so it never falls through to static HTML
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({ error: `API route ${req.method} ${req.originalUrl} not found` });
+  });
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatApiUrl } from '../lib/api';
 import { 
   CheckSquare, 
   Clock, 
@@ -112,7 +113,7 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
   const fetchInsights = async () => {
     try {
       if (!token) return;
-      const res = await fetch('/api/analytics/workspace-insights', {
+      const res = await fetch(formatApiUrl('/api/analytics/workspace-insights'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -129,7 +130,7 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
   const handleUpdateStatus = async (taskId: number, newStatus: 'TODO' | 'IN_PROGRESS' | 'COMPLETED') => {
     setUpdatingTaskId(taskId);
     try {
-      const res = await fetch(`/api/tasks/${taskId}`, {
+      const res = await fetch(formatApiUrl(`/api/tasks/${taskId}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { Link, useNavigate } from 'react-router-dom';
+import { formatApiUrl } from '../lib/api';
 
 interface TeamMember {
   id: number;
@@ -101,7 +102,7 @@ export const Teams = () => {
   ];
 
   useEffect(() => {
-    fetch('/api/users', {
+    fetch(formatApiUrl('/api/users'), {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())

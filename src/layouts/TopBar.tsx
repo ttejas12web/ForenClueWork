@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, Search, LogOut, Menu, Shield, Crown, User, Check, X, CheckSquare, Sparkles, ExternalLink, CheckCheck } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
+import { formatApiUrl } from '../lib/api';
 
 interface TopBarProps {
   mobileMenuOpen: boolean;
@@ -31,7 +32,7 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
   const fetchNotifications = async () => {
     if (!token) return;
     try {
-      const res = await fetch('/api/notifications', {
+      const res = await fetch(formatApiUrl('/api/notifications'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -53,7 +54,7 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
   const handleMarkAllRead = async () => {
     if (!token) return;
     try {
-      await fetch('/api/notifications/read-all', {
+      await fetch(formatApiUrl('/api/notifications/read-all'), {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -67,7 +68,7 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
   const handleNotificationClick = async (notif: NotificationItem) => {
     if (!notif.read && token) {
       try {
-        await fetch(`/api/notifications/${notif.id}/read`, {
+        await fetch(formatApiUrl(`/api/notifications/${notif.id}/read`), {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token}` }
         });

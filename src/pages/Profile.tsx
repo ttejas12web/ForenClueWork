@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
+import { formatApiUrl } from '../lib/api';
 import { 
   Mail, 
   Hash, 
@@ -135,7 +136,7 @@ export const Profile = () => {
   useEffect(() => {
     if (!token) return;
     setLoadingTasks(true);
-    fetch('/api/tasks', {
+    fetch(formatApiUrl('/api/tasks'), {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -180,7 +181,7 @@ export const Profile = () => {
     setProfileSaveSuccess(false);
 
     try {
-      const res = await fetch('/api/auth/profile', {
+      const res = await fetch(formatApiUrl('/api/auth/profile'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -227,7 +228,7 @@ export const Profile = () => {
 
     setPasswordLoading(true);
     try {
-      const res = await fetch('/api/auth/update-password', {
+      const res = await fetch(formatApiUrl('/api/auth/update-password'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

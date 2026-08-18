@@ -25,6 +25,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { formatApiUrl } from '../lib/api';
 
 export interface WorkspaceTask {
   id: number;
@@ -110,7 +111,7 @@ export const Tasks: React.FC = () => {
         params.append('priority', priorityFilter);
       }
 
-      const res = await fetch(`/api/tasks?${params.toString()}`, {
+      const res = await fetch(formatApiUrl(`/api/tasks?${params.toString()}`), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -126,14 +127,21 @@ export const Tasks: React.FC = () => {
 
   // Fetch available workspace members
   const fetchMembers = async () => {
+    if (!token) return;
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch(formatApiUrl('/api/users'), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (res.ok) {
         const data = await res.json();
-        setMembers(data);
+        if (Array.isArray(data)) {
+          setMembers(data);
+        }
       }
-    } catch (err) {
-      console.error('Error fetching members:', err);
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.warn('Error fetching members:', err?.message || err);
+      }
     }
   };
 
@@ -189,7 +197,7 @@ export const Tasks: React.FC = () => {
 
       if (editingTask) {
         // Update task
-        const res = await fetch(`/api/tasks/${editingTask.id}`, {
+        const res = await fetch(formatApiUrl(`/api/tasks/${editingTask.id}`), {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -210,7 +218,7 @@ export const Tasks: React.FC = () => {
         }
       } else {
         // Create task
-        const res = await fetch('/api/tasks', {
+        const res = await fetch(formatApiUrl('/api/tasks'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -244,7 +252,7 @@ export const Tasks: React.FC = () => {
   const handleUpdateStatus = async (taskId: number, newStatus: 'TODO' | 'IN_PROGRESS' | 'COMPLETED') => {
     if (!token) return;
     try {
-      const res = await fetch(`/api/tasks/${taskId}`, {
+      const res = await fetch(formatApiUrl(`/api/tasks/${taskId}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -267,7 +275,7 @@ export const Tasks: React.FC = () => {
   const handleDeleteTask = async (taskId: number) => {
     if (!token || !window.confirm('Are you sure you want to delete this workspace task?')) return;
     try {
-      const res = await fetch(`/api/tasks/${taskId}`, {
+      const res = await fetch(formatApiUrl(`/api/tasks/${taskId}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -286,7 +294,7 @@ export const Tasks: React.FC = () => {
     if (!showDeliverableModal || !token) return;
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/tasks/${showDeliverableModal.id}`, {
+      const res = await fetch(formatApiUrl(`/api/tasks/${showDeliverableModal.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

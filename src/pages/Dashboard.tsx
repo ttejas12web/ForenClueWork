@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { MemberInfographicHub } from '../components/MemberInfographicHub';
+import { formatApiUrl } from '../lib/api';
 import { 
   CheckSquare, 
   Users, 
@@ -56,7 +57,7 @@ export const Dashboard = () => {
 
     // Fetch users count if admin
     if (isAdmin) {
-      fetch('/api/users', { headers: { Authorization: `Bearer ${token}` } })
+      fetch(formatApiUrl('/api/users'), { headers: { Authorization: `Bearer ${token}` } })
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
@@ -67,7 +68,7 @@ export const Dashboard = () => {
     }
 
     // Fetch groups for live preview
-    fetch('/api/chat/groups', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(formatApiUrl('/api/chat/groups'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -78,7 +79,7 @@ export const Dashboard = () => {
       .catch(() => {});
 
     // Fetch tasks (Admin gets all, member gets ONLY tasks allotted to him)
-    fetch('/api/tasks', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(formatApiUrl('/api/tasks'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
