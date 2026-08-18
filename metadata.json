@@ -1,0 +1,8 @@
+{
+  "name": "ForenClue Workspace",
+  "description": "Internal workspace and team collaboration platform for ForenClue with Cloud SQL relational backend.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

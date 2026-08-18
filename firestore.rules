@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function hasRole(role) {
+      return getUserData().role == role;
+    }
+    
+    function isSuperAdmin() {
+      return getUserData().role == 'SUPER_ADMIN';
+    }
+
+    match /user_mappings/{mappingId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isSuperAdmin();
+    }
+
+    // Allow users to create their own profile, or admins to manage users
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow delete: if isSignedIn() && isSuperAdmin();
+    }
+
+    match /teams/{teamId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isSuperAdmin();
+    }
+
+    match /projects/{projectId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isSuperAdmin() || hasRole('MENTOR'));
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); 
+    }
+
+    match /task_submissions/{submissionId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /messages/{messageId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /chat_rooms/{roomId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /resources/{resourceId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /announcements/{annId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isSuperAdmin() || hasRole('MENTOR'));
+    }
+
+    match /calendar_events/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isSuperAdmin() || hasRole('MENTOR'));
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isSignedIn() && isSuperAdmin();
+      allow write: if isSignedIn();
+    }
+  }
+}
