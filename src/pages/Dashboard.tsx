@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
+import { MemberInfographicHub } from '../components/MemberInfographicHub';
 import { 
   CheckSquare, 
   Users, 
@@ -18,7 +19,9 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
-  UserCheck
+  UserCheck,
+  BarChart3,
+  LayoutDashboard
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -44,6 +47,7 @@ export const Dashboard = () => {
   const [recentGroups, setRecentGroups] = useState<any[]>([]);
   const [tasks, setTasks] = useState<DashboardTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
+  const [adminViewMode, setAdminViewMode] = useState<'EXECUTIVE' | 'INFOGRAPHIC'>('EXECUTIVE');
 
   const isAdmin = user?.role === 'SUPER_ADMIN';
 
@@ -95,21 +99,60 @@ export const Dashboard = () => {
   const activeTasksCount = tasks.filter(t => t.status !== 'COMPLETED').length;
   const completedTasksCount = tasks.filter(t => t.status === 'COMPLETED').length;
 
-  const stats = isAdmin ? [
+  // Non-SuperAdmin members and volunteers immediately see the rich interactive Infographics Hub
+  if (!isAdmin) {
+    return <MemberInfographicHub user={user} token={token} />;
+  }
+
+  const stats = [
     { title: 'Workspace Members', value: totalUsers !== null ? totalUsers.toString() : '...', icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
     { title: 'Allotted Tasks', value: tasks.length.toString(), icon: CheckSquare, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { title: 'Chat Channels', value: activeGroupsCount !== null ? activeGroupsCount.toString() : '...', icon: MessageSquare, color: 'text-indigo-600', bg: 'bg-indigo-50' },
     { title: 'System Security', value: 'Protected', icon: ShieldCheck, color: 'text-purple-600', bg: 'bg-purple-50' },
-  ] : [
-    { title: 'My Active Tasks', value: activeTasksCount.toString(), icon: CheckSquare, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { title: 'Completed Tasks', value: completedTasksCount.toString(), icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { title: 'Workspace Groups', value: activeGroupsCount !== null ? activeGroupsCount.toString() : '...', icon: MessageSquare, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { title: 'Member Status', value: 'Verified', icon: ShieldCheck, color: 'text-amber-600', bg: 'bg-amber-50' },
   ];
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      
+      {/* Super Admin Executive View vs Infographics Switcher */}
+      <div className="flex items-center justify-between bg-slate-900 text-white px-4 py-2.5 rounded-2xl border border-slate-800 shadow-sm">
+        <div className="flex items-center space-x-2">
+          <Crown className="h-4 w-4 text-amber-400" />
+          <span className="text-xs font-bold">Super Admin Executive Mode</span>
+        </div>
+        <div className="flex items-center gap-1.5 bg-slate-800 p-1 rounded-xl">
+          <button
+            onClick={() => setAdminViewMode('EXECUTIVE')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              adminViewMode === 'EXECUTIVE'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5">
+              <LayoutDashboard className="h-3.5 w-3.5" />
+              <span>Admin Center</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setAdminViewMode('INFOGRAPHIC')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              adminViewMode === 'INFOGRAPHIC'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5">
+              <BarChart3 className="h-3.5 w-3.5" />
+              <span>Interactive Infographics</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {adminViewMode === 'INFOGRAPHIC' ? (
+        <MemberInfographicHub user={user} token={token} />
+      ) : (
+        <>
       {/* Welcome Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-5 sm:p-7 shadow-sm border border-slate-800">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -476,6 +519,8 @@ export const Dashboard = () => {
 
         </div>
       </div>
+        </>
+      )}
 
     </div>
   );

@@ -62,21 +62,21 @@ const DEPARTMENT_MENTORS: Record<string, DepartmentMentor> = {
   },
   'Case Study': {
     name: 'Ayush Gaikwad',
-    forenclueId: 'FC-EMP-2026-002',
+    forenclueId: 'FC-EMP-2026-003',
     email: 'ayush.gaikwad@forenclue.com',
     code: 'CS',
     color: 'bg-emerald-600'
   },
   'Research': {
-    name: 'Purva Bawsar',
-    forenclueId: 'FC-EMP-2026-003',
-    email: 'purva.bawsar@forenclue.com',
+    name: 'Purva Bhawsar',
+    forenclueId: 'FC-EMP-2026-004',
+    email: 'purva.bhawsar@forenclue.com',
     code: 'RS',
     color: 'bg-blue-600'
   },
   'Events & Webinars': {
     name: 'Mrunmayee Bodhe',
-    forenclueId: 'FC-MNT-2026-004',
+    forenclueId: 'FC-EMP-2026-002',
     email: 'mrunmayee.bodhe@forenclue.com',
     code: 'EW',
     color: 'bg-purple-600'
@@ -271,7 +271,7 @@ export const Profile = () => {
             <div className="flex items-center space-x-2">
               <span className="hidden sm:inline-flex items-center px-2.5 py-1 bg-emerald-500/20 backdrop-blur-md border border-emerald-400/30 text-emerald-300 rounded-full text-xs font-medium">
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                Clearance: Level 3 Active
+                {isSuperAdmin ? 'Clearance: LEVEL 1 (Top Authority)' : 'Clearance: Level 2 Active'}
               </span>
             </div>
           </div>
@@ -523,7 +523,7 @@ export const Profile = () => {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Security Clearance</span>
-                  <span className="text-blue-400 font-semibold">Tier-3 Forensic</span>
+                  <span className="text-blue-400 font-semibold">{isSuperAdmin ? 'Tier-1 Executive (LEVEL 1)' : 'Tier-2 Active'}</span>
                 </div>
 
                 {/* Simulated Barcode */}

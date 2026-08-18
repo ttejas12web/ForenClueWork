@@ -63,7 +63,7 @@ export const Teams = () => {
       desc: 'Forensic case study investigations, incident post-mortems, forensic timelines, and historical case archives.', 
       code: 'CS', 
       mentorName: 'Ayush Gaikwad',
-      mentorId: 'FC-EMP-2026-002',
+      mentorId: 'FC-EMP-2026-003',
       mentorEmail: 'ayush.gaikwad@forenclue.com',
       color: 'bg-emerald-600',
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -72,9 +72,9 @@ export const Teams = () => {
       name: 'Research', 
       desc: 'Scientific literature review, forensic methodology analysis, evidence validation, and laboratory findings.', 
       code: 'RS', 
-      mentorName: 'Purva Bawsar',
-      mentorId: 'FC-EMP-2026-003',
-      mentorEmail: 'purva.bawsar@forenclue.com',
+      mentorName: 'Purva Bhawsar',
+      mentorId: 'FC-EMP-2026-004',
+      mentorEmail: 'purva.bhawsar@forenclue.com',
       color: 'bg-blue-600',
       badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
     },
@@ -83,7 +83,7 @@ export const Teams = () => {
       desc: 'Workshops, expert keynote webinars, technical training bootcamps, and educational community sessions.', 
       code: 'EW', 
       mentorName: 'Mrunmayee Bodhe',
-      mentorId: 'FC-MNT-2026-004',
+      mentorId: 'FC-EMP-2026-002',
       mentorEmail: 'mrunmayee.bodhe@forenclue.com',
       color: 'bg-purple-600',
       badgeColor: 'bg-purple-50 text-purple-700 border-purple-200'
@@ -92,9 +92,9 @@ export const Teams = () => {
       name: 'Cyber & Digital Forensics', 
       desc: 'Digital evidence examination, volatile memory triage, network packet analysis, and malware investigation.', 
       code: 'CF', 
-      mentorName: 'Alex Sterling',
-      mentorId: 'FC-MNT-2026-005',
-      mentorEmail: 'alex.sterling@forenclue.com',
+      mentorName: 'Tejas Tapse',
+      mentorId: 'FC-EMP-2026-001',
+      mentorEmail: 'tejas.tapse@forenclue.com',
       color: 'bg-indigo-600',
       badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200'
     },

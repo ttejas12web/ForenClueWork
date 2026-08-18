@@ -42,8 +42,17 @@ export const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-6 bg-white p-6 sm:p-8 rounded-3xl shadow-2xl border border-slate-100">
         <div className="flex flex-col items-center text-center">
-          <div className="h-14 w-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/30 mb-3">
-            <Shield className="h-8 w-8 text-white" />
+          <div className="relative mb-3 flex items-center justify-center">
+            {/* Backdrop glow / shadow */}
+            <div className="absolute inset-0 rounded-2xl bg-blue-600/15 blur-xl scale-125 pointer-events-none" />
+            <div className="relative h-18 w-18 sm:h-20 sm:w-20 rounded-2xl bg-white p-2.5 flex items-center justify-center shadow-xl shadow-slate-900/10 border border-slate-100 ring-1 ring-slate-900/5">
+              <img
+                src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj7yfh9aP-3k7exKSgvW9ynV7lb9j62shvwJrpkiEi_9yiWUSxntW5Poc-MOXQCA0fd635VLo8C35glEPFtlSByqxDDepzEAX6D5T4SzFX-8fyKDIoo7_wV3EXH6u-UDF6P344Q4RRlRFY-qfqITWnuSXa7feb89eDlR9SCODoodogdY89rBez2K7fOiQI/s372/4b5616a4-6069-44a7-ba52-88f965165067.png"
+                alt="ForenClue Logo"
+                className="h-full w-full object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.12)] transition-transform hover:scale-105"
+                referrerPolicy="no-referrer"
+              />
+            </div>
           </div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">
             ForenClue Workspace
@@ -79,7 +88,7 @@ export const Login = () => {
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="appearance-none block w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-xs transition-all"
-                  placeholder="e.g. FC-ADMIN-2026-001 or admin@forenclue.com"
+                  placeholder="e.g. FC-VOL-2026-025 or FC-EMP-2026-001"
                 />
               </div>
             </div>

@@ -93,8 +93,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
           onClick={() => setMobileMenuOpen(false)}
           className="flex items-center space-x-3 group"
         >
-          <div className="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center font-black text-white shadow-md shadow-blue-600/30 group-hover:scale-105 transition-transform">
-            <Shield className="h-5 w-5 text-white" />
+          <div className="h-9 w-9 rounded-xl bg-white p-1 flex items-center justify-center shadow-md shadow-blue-500/20 ring-1 ring-white/20 group-hover:scale-105 transition-transform flex-shrink-0">
+            <img 
+              src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj7yfh9aP-3k7exKSgvW9ynV7lb9j62shvwJrpkiEi_9yiWUSxntW5Poc-MOXQCA0fd635VLo8C35glEPFtlSByqxDDepzEAX6D5T4SzFX-8fyKDIoo7_wV3EXH6u-UDF6P344Q4RRlRFY-qfqITWnuSXa7feb89eDlR9SCODoodogdY89rBez2K7fOiQI/s372/4b5616a4-6069-44a7-ba52-88f965165067.png" 
+              alt="ForenClue Logo" 
+              className="h-full w-full object-contain drop-shadow-xs" 
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div>
             <div className="flex items-center space-x-1.5">

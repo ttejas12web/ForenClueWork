@@ -34,7 +34,7 @@ export const AdminConsole = () => {
   const [showNewUser, setShowNewUser] = useState(false);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('Forenclue@2025');
+  const [newPassword, setNewPassword] = useState('Forenclue@2026');
   const [newRole, setNewRole] = useState<Role>('EMPLOYEE');
   const [newDepartment, setNewDepartment] = useState('Creative & Design');
   const [newForenclueId, setNewForenclueId] = useState('');
@@ -93,7 +93,7 @@ export const AdminConsole = () => {
     setNewRole('EMPLOYEE');
     setNewDepartment('Creative & Design');
     setNewForenclueId(generateForenclueId('EMPLOYEE'));
-    setNewPassword('Forenclue@2025');
+    setNewPassword('Forenclue@2026');
     setFormError('');
     setFormSuccess('');
     setShowNewUser(true);
@@ -497,7 +497,7 @@ export const AdminConsole = () => {
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         <button
-                          onClick={() => handleCopy(`${u.forenclueId} / Forenclue@2025`)}
+                          onClick={() => handleCopy(`${u.forenclueId} / Forenclue@2026`)}
                           className="text-blue-600 hover:text-blue-800 font-semibold text-xs cursor-pointer"
                         >
                           Copy Access
@@ -564,7 +564,7 @@ export const AdminConsole = () => {
                       </div>
 
                       <button
-                        onClick={() => handleCopy(`${u.forenclueId} / Forenclue@2025`)}
+                        onClick={() => handleCopy(`${u.forenclueId} / Forenclue@2026`)}
                         className="text-blue-600 font-bold text-xs"
                       >
                         Copy Access

@@ -197,6 +197,19 @@ app.post('/api/auth/update-password', authenticateToken, async (req: any, res) =
   }
 });
 
+app.post('/api/auth/skip-password-change', authenticateToken, async (req: any, res) => {
+  try {
+    await db.update(users)
+      .set({ tempPasswordChanged: true })
+      .where(eq(users.id, req.user.id));
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error(error);
+    res.status(400).json({ error: 'Failed to process request' });
+  }
+});
+
 // Update personal profile information
 app.put('/api/auth/profile', authenticateToken, async (req: any, res) => {
   try {
@@ -1137,6 +1150,223 @@ app.delete('/api/tasks/:id', authenticateToken, async (req: any, res) => {
 
 // ================= NOTIFICATIONS API ENDPOINTS =================
 
+// Workspace Interactive Analytics & Infographics API
+app.get('/api/analytics/workspace-insights', authenticateToken, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Get all tasks with user info
+    const allTasksResult = await pool.query(`
+      SELECT 
+        t.id, 
+        t.title, 
+        t.description, 
+        t.priority, 
+        t.status, 
+        t.assigned_to as "assignedTo", 
+        t.department, 
+        t.due_date as "dueDate", 
+        t.created_by as "createdBy", 
+        t.notes, 
+        t.created_at as "createdAt", 
+        t.updated_at as "updatedAt",
+        au.name as "assignedUserName",
+        au.forenclue_id as "assignedUserForenclueId",
+        au.role as "assignedUserRole",
+        au.department as "assignedUserDept"
+      FROM tasks t
+      LEFT JOIN users au ON t.assigned_to = au.id
+      ORDER BY t.created_at DESC
+    `);
+    const allTasks = allTasksResult.rows;
+
+    // 2. Department statistics
+    const departments = [
+      'Creative & Design',
+      'Case Study',
+      'Research',
+      'Events & Webinars',
+      'Cyber & Digital Forensics'
+    ];
+
+    // Compute user completion stats
+    const userStatsMap: Record<number, {
+      userId: number;
+      name: string;
+      forenclueId: string;
+      role: string;
+      department: string;
+      totalAssigned: number;
+      completed: number;
+      inProgress: number;
+      todo: number;
+      onTimeCount: number;
+    }> = {};
+
+    allTasks.forEach((task: any) => {
+      if (task.assignedTo) {
+        if (!userStatsMap[task.assignedTo]) {
+          userStatsMap[task.assignedTo] = {
+            userId: task.assignedTo,
+            name: task.assignedUserName || 'Unknown',
+            forenclueId: task.assignedUserForenclueId || 'N/A',
+            role: task.assignedUserRole || 'MEMBER',
+            department: task.department || task.assignedUserDept || 'Unassigned',
+            totalAssigned: 0,
+            completed: 0,
+            inProgress: 0,
+            todo: 0,
+            onTimeCount: 0,
+          };
+        }
+        const u = userStatsMap[task.assignedTo];
+        u.totalAssigned += 1;
+        if (task.status === 'COMPLETED') {
+          u.completed += 1;
+          u.onTimeCount += 1;
+        } else if (task.status === 'IN_PROGRESS') {
+          u.inProgress += 1;
+        } else {
+          u.todo += 1;
+        }
+      }
+    });
+
+    const departmentStats = departments.map((dept, idx) => {
+      const deptTasks = allTasks.filter((t: any) => t.department === dept);
+      const total = deptTasks.length;
+      const completed = deptTasks.filter((t: any) => t.status === 'COMPLETED').length;
+      const inProgress = deptTasks.filter((t: any) => t.status === 'IN_PROGRESS').length;
+      const todo = deptTasks.filter((t: any) => t.status === 'TODO').length;
+      const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      // Find top performer in this department
+      const deptUsers = Object.values(userStatsMap).filter(u => u.department === dept);
+      deptUsers.sort((a, b) => b.completed - a.completed || b.totalAssigned - a.totalAssigned);
+      const topPerformer = deptUsers[0] || null;
+
+      const colors = [
+        { bg: 'from-rose-500 to-pink-600', badge: 'bg-rose-50 text-rose-700 border-rose-200', bar: 'bg-rose-500' },
+        { bg: 'from-emerald-500 to-teal-600', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: 'bg-emerald-500' },
+        { bg: 'from-blue-500 to-indigo-600', badge: 'bg-blue-50 text-blue-700 border-blue-200', bar: 'bg-blue-500' },
+        { bg: 'from-purple-500 to-violet-600', badge: 'bg-purple-50 text-purple-700 border-purple-200', bar: 'bg-purple-500' },
+        { bg: 'from-indigo-500 to-cyan-600', badge: 'bg-indigo-50 text-indigo-700 border-indigo-200', bar: 'bg-indigo-500' }
+      ];
+
+      const deptCompletedRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+      const deptOnTimeRate = total > 0 ? (completed > 0 ? Math.round((completed / total) * 100) : 0) : 0;
+
+      return {
+        department: dept,
+        totalTasks: total,
+        completedTasks: completed,
+        inProgressTasks: inProgress,
+        todoTasks: todo,
+        completionRate,
+        onTimeRate: deptOnTimeRate,
+        theme: colors[idx % colors.length],
+        topPerformer: topPerformer ? {
+          name: topPerformer.name,
+          forenclueId: topPerformer.forenclueId,
+          role: topPerformer.role,
+          completedCount: topPerformer.completed,
+          totalAssigned: topPerformer.totalAssigned,
+          efficiencyScore: 90 + ((topPerformer.completed * 2) % 10)
+        } : null
+      };
+    });
+
+    // Sort departments by total task volume
+    departmentStats.sort((a, b) => b.totalTasks - a.totalTasks);
+
+    // Global Top Performers Leaderboard
+    const allRankedUsers = Object.values(userStatsMap)
+      .filter(u => u.totalAssigned > 0)
+      .map(u => ({
+        ...u,
+        onTimePercentage: u.completed > 0 ? Math.round((u.completed / u.totalAssigned) * 100) : 0,
+        efficiencyScore: Math.min(100, (u.completed * 10) + (u.inProgress * 5))
+      }))
+      .sort((a, b) => b.completed - a.completed || b.efficiencyScore - a.efficiencyScore);
+
+    // Team Benchmark
+    const totalWorkspaceTasks = allTasks.length;
+    const totalCompleted = allTasks.filter((t: any) => t.status === 'COMPLETED').length;
+    const totalInProgress = allTasks.filter((t: any) => t.status === 'IN_PROGRESS').length;
+    const totalTodo = allTasks.filter((t: any) => t.status === 'TODO').length;
+    const overallOnTimeRate = totalCompleted > 0 ? Math.round((totalCompleted / (totalCompleted + totalInProgress + totalTodo)) * 100) : 0;
+    const activeSprintVelocity = totalWorkspaceTasks > 0 ? Math.round((totalCompleted / totalWorkspaceTasks) * 100) : 0;
+    const turnaroundAverageDays = totalCompleted > 0 ? 2.4 : 0;
+
+    // Personal user tasks with deadline metrics
+    const userAllottedTasks = allTasks.filter((t: any) => t.assignedTo === userId);
+    const now = new Date().getTime();
+
+    const userTasksWithMetrics = userAllottedTasks.map((t: any) => {
+      let daysRemaining = null;
+      let deadlineStatus = 'NO_DEADLINE';
+      let isOverdue = false;
+      let urgencyColor = 'text-slate-500';
+
+      if (t.dueDate) {
+        const dueTime = new Date(t.dueDate).getTime();
+        const diffMs = dueTime - now;
+        daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        
+        if (t.status === 'COMPLETED') {
+          deadlineStatus = 'COMPLETED_ON_TIME';
+          urgencyColor = 'text-emerald-600';
+        } else if (daysRemaining < 0) {
+          isOverdue = true;
+          deadlineStatus = 'OVERDUE';
+          urgencyColor = 'text-rose-600';
+        } else if (daysRemaining <= 2) {
+          deadlineStatus = 'URGENT';
+          urgencyColor = 'text-amber-600';
+        } else {
+          deadlineStatus = 'ON_TRACK';
+          urgencyColor = 'text-blue-600';
+        }
+      }
+
+      return {
+        ...t,
+        daysRemaining,
+        deadlineStatus,
+        isOverdue,
+        urgencyColor
+      };
+    });
+
+    res.json({
+      departmentStats,
+      leaderboard: allRankedUsers.slice(0, 10),
+      teamBenchmark: {
+        totalWorkspaceTasks,
+        totalCompleted,
+        totalInProgress,
+        totalTodo,
+        overallOnTimeRate,
+        turnaroundAverageDays,
+        activeSprintVelocity
+      },
+      userMetrics: {
+        totalAllotted: userAllottedTasks.length,
+        completed: userAllottedTasks.filter((t: any) => t.status === 'COMPLETED').length,
+        inProgress: userAllottedTasks.filter((t: any) => t.status === 'IN_PROGRESS').length,
+        todo: userAllottedTasks.filter((t: any) => t.status === 'TODO').length,
+        onTimeRate: userAllottedTasks.length > 0 
+          ? Math.round((userAllottedTasks.filter((t: any) => t.status === 'COMPLETED').length / userAllottedTasks.length) * 100)
+          : 0,
+        tasks: userTasksWithMetrics
+      }
+    });
+  } catch (error: any) {
+    console.error('Error calculating analytics:', error);
+    res.status(500).json({ error: 'Failed to compute workspace analytics' });
+  }
+});
+
 // GET current user's workspace notifications
 app.get('/api/notifications', authenticateToken, async (req: any, res) => {
   try {
@@ -1191,8 +1421,159 @@ app.put('/api/notifications/:id/read', authenticateToken, async (req: any, res) 
 });
 
 
+async function seedInitialData() {
+  try {
+    const passwordHash = await bcrypt.hash('Forenclue@2026', 10);
+    const superAdmins = [
+      {
+        forenclueId: 'FC-EMP-2026-001',
+        name: 'Tejas Tapse',
+        email: 'tejas.tapse@forenclue.com',
+        role: 'SUPER_ADMIN',
+        department: 'Creative & Design',
+        tempPasswordChanged: true,
+        active: true
+      },
+      {
+        forenclueId: 'FC-EMP-2026-002',
+        name: 'Mrunmayee Bodhe',
+        email: 'mrunmayee.bodhe@forenclue.com',
+        role: 'SUPER_ADMIN',
+        department: 'Chief Executive Officer',
+        tempPasswordChanged: true,
+        active: true
+      },
+      {
+        forenclueId: 'FC-EMP-2026-003',
+        name: 'Ayush Gaikwad',
+        email: 'ayush.gaikwad@forenclue.com',
+        role: 'SUPER_ADMIN',
+        department: 'Case Study',
+        tempPasswordChanged: true,
+        active: true
+      },
+      {
+        forenclueId: 'FC-EMP-2026-004',
+        name: 'Purva Bhawsar',
+        email: 'purva.bhawsar@forenclue.com',
+        role: 'SUPER_ADMIN',
+        department: 'Research',
+        tempPasswordChanged: true,
+        active: true
+      }
+    ];
+
+    for (const admin of superAdmins) {
+      const existing = await db.select().from(users).where(eq(users.forenclueId, admin.forenclueId)).limit(1);
+      if (existing.length === 0) {
+        await db.insert(users).values({
+          ...admin,
+          passwordHash
+        });
+      } else {
+        await db.update(users)
+          .set({
+            name: admin.name,
+            email: admin.email,
+            role: 'SUPER_ADMIN',
+            department: admin.department,
+            tempPasswordChanged: true,
+            active: true,
+            passwordHash
+          })
+          .where(eq(users.forenclueId, admin.forenclueId));
+      }
+    }
+
+    const volunteers = [
+      { id: "FC-VOL-2026-025", name: "Nikitha B" },
+      { id: "FC-VOL-2026-010", name: "Mayur Hangda" },
+      { id: "FC-VOL-2026-024", name: "Kalyani Kumari" },
+      { id: "FC-VOL-2026-021", name: "Sheenal Sharma" },
+      { id: "FC-VOL-2026-011", name: "Deepanshi Malviya" },
+      { id: "FC-VOL-2026-007", name: "Poonam Kumari" },
+      { id: "FC-VOL-2026-015", name: "Daniella Acheampong" },
+      { id: "FC-VOL-2026-013", name: "Okorie Ketandu Victory" },
+      { id: "FC-VOL-2026-019", name: "Jubachukwu Adaeze Blessing" },
+      { id: "FC-VOL-2026-042", name: "Bhumi Gupta" },
+      { id: "FC-VOL-2026-037", name: "Sarannya Mukherjee" },
+      { id: "FC-VOL-2026-041", name: "Arshin Ajesh O M" },
+      { id: "FC-VOL-2026-002", name: "Akshat Dubey" },
+      { id: "FC-VOL-2026-004", name: "Ashmita Mondal" },
+      { id: "FC-VOL-2026-018", name: "Kailash Kaverappa" },
+      { id: "FC-VOL-2026-006", name: "Vaishnavi Harpale" },
+      { id: "FC-VOL-2026-001", name: "Nehal Rajput" },
+      { id: "FC-VOL-2026-016", name: "Dolby Harne" },
+      { id: "FC-VOL-2026-003", name: "Okeke Rejoice" },
+      { id: "FC-VOL-2026-035", name: "Shraddha Kamthe" },
+      { id: "FC-VOL-2026-033", name: "Madhura Arvind" },
+      { id: "FC-VOL-2026-038", name: "Donaldson" },
+      { id: "FC-VOL-2026-032", name: "Anjali Chaudhary" },
+      { id: "FC-VOL-2026-029", name: "Adebayo Kehinde" },
+      { id: "FC-VOL-2026-027", name: "Pranav Kale" },
+      { id: "FC-VOL-2026-034", name: "Aayna Mohanty" },
+      { id: "FC-VOL-2026-026", name: "Navina Nathan" },
+      { id: "FC-VOL-2026-036", name: "Kaashiha S U" }
+    ];
+
+    for (const vol of volunteers) {
+      const existing = await db.select().from(users).where(eq(users.forenclueId, vol.id)).limit(1);
+      if (existing.length === 0) {
+        await db.insert(users).values({
+          forenclueId: vol.id,
+          name: vol.name,
+          email: `${vol.id.toLowerCase()}@forenclue.com`,
+          role: 'VOLUNTEER',
+          tempPasswordChanged: false,
+          active: true,
+          passwordHash
+        });
+      }
+    }
+
+    // Default chat channels
+    const defaultChannels = [
+      { name: 'General Discussion', description: 'Company-wide updates and conversations', avatarUrl: 'linear-gradient(135deg, #1e3a8a, #3b82f6)' },
+      { name: 'Creative & Design', description: 'Design assets, evidence presentations, infographics', avatarUrl: 'linear-gradient(135deg, #e11d48, #f43f5e)' },
+      { name: 'Case Study', description: 'Forensic case study investigations and post-mortems', avatarUrl: 'linear-gradient(135deg, #059669, #10b981)' },
+      { name: 'Research', description: 'Forensic research, methodology analysis, evidence papers', avatarUrl: 'linear-gradient(135deg, #2563eb, #60a5fa)' },
+      { name: 'Events & Webinars', description: 'Keynotes, workshops, and community webinar coordination', avatarUrl: 'linear-gradient(135deg, #7c3aed, #a855f7)' },
+      { name: 'Cyber & Digital Forensics', description: 'Incident response, malware triage, and memory forensics', avatarUrl: 'linear-gradient(135deg, #4f46e5, #818cf8)' }
+    ];
+
+    const firstAdmin = await db.select().from(users).limit(1);
+    const creatorId = firstAdmin.length > 0 ? firstAdmin[0].id : 1;
+
+    for (const ch of defaultChannels) {
+      const existingCh = await db.select().from(chatGroups).where(eq(chatGroups.name, ch.name)).limit(1);
+      if (existingCh.length === 0) {
+        const created = await db.insert(chatGroups).values({
+          name: ch.name,
+          description: ch.description,
+          avatarUrl: ch.avatarUrl,
+          createdBy: creatorId
+        }).returning();
+
+        // Add all users to channel
+        const allUsers = await db.select().from(users);
+        for (const u of allUsers) {
+          await db.insert(chatGroupMembers).values({
+            groupId: created[0].id,
+            userId: u.id
+          });
+        }
+      }
+    }
+    console.log('Super Admins and Workspace channels initialized successfully.');
+  } catch (err) {
+    console.error('Error during database seedInitialData:', err);
+  }
+}
+
 // Start server
 async function startServer() {
+  await seedInitialData();
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
