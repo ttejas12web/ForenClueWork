@@ -25,18 +25,27 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { formatApiUrl } from '../lib/api';
+import {
+  subscribeToTasks,
+  subscribeToUsers,
+  createFirestoreTask,
+  updateFirestoreTask,
+  deleteFirestoreTask,
+  submitTaskDeliverable,
+  FirestoreTask,
+  FirestoreUser
+} from '../lib/firestoreService';
 
 export interface WorkspaceTask {
-  id: number;
+  id: any;
   title: string;
   description: string | null;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
-  status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
-  assignedTo: number | null;
+  status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED' | 'SUBMITTED' | 'UNDER REVIEW';
+  assignedTo: any;
   department: string | null;
   dueDate: string | null;
-  createdBy: number;
+  createdBy: any;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -49,7 +58,7 @@ export interface WorkspaceTask {
 }
 
 interface WorkspaceMember {
-  id: number;
+  id: any;
   forenclueId: string;
   name: string;
   email: string;
@@ -96,59 +105,37 @@ export const Tasks: React.FC = () => {
   };
 
   // Fetch tasks
-  const fetchTasks = async () => {
-    if (!token) return;
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
+  useEffect(() => {
+    if (!user) return;
+
+    setLoading(true);
+
+    const unsubUsers = subscribeToUsers((usersList) => {
+      setMembers(usersList as unknown as WorkspaceMember[]);
+    });
+
+    const unsubTasks = subscribeToTasks((tasksList) => {
+      let filtered = tasksList;
+      
       if (isSuperAdmin && selectedMemberFilter !== 'ALL') {
-        params.append('memberId', selectedMemberFilter);
+        filtered = filtered.filter(t => String(t.assignedTo) === selectedMemberFilter);
       }
       if (statusFilter !== 'ALL') {
-        params.append('status', statusFilter);
+        filtered = filtered.filter(t => t.status === statusFilter);
       }
       if (priorityFilter !== 'ALL') {
-        params.append('priority', priorityFilter);
+        filtered = filtered.filter(t => t.priority === priorityFilter);
       }
-
-      const res = await fetch(formatApiUrl(`/api/tasks?${params.toString()}`), {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTasks(data);
-      }
-    } catch (err) {
-      console.error('Error fetching tasks:', err);
-    } finally {
+      
+      setTasks(filtered as unknown as WorkspaceTask[]);
       setLoading(false);
-    }
-  };
+    }, user.id, user.role);
 
-  // Fetch available workspace members
-  const fetchMembers = async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(formatApiUrl('/api/users'), {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setMembers(data);
-        }
-      }
-    } catch (err: any) {
-      if (err?.name !== 'AbortError') {
-        console.warn('Error fetching members:', err?.message || err);
-      }
-    }
-  };
-
-  useEffect(() => {
-    fetchTasks();
-    fetchMembers();
-  }, [token, statusFilter, selectedMemberFilter, priorityFilter]);
+    return () => {
+      unsubUsers();
+      unsubTasks();
+    };
+  }, [user, statusFilter, selectedMemberFilter, priorityFilter]);
 
   // Open Allot Task Modal
   const handleOpenCreateModal = () => {
@@ -181,62 +168,48 @@ export const Tasks: React.FC = () => {
   // Create or Update Task
   const handleSaveTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!taskTitle.trim() || !token) return;
+    if (!taskTitle.trim() || !user) return;
 
     try {
       setActionLoading(true);
-      const payload = {
+      
+      const assignedUser = members.find(m => String(m.id) === String(taskAssignedTo));
+      
+      const payload: Partial<FirestoreTask> = {
         title: taskTitle.trim(),
         description: taskDesc.trim(),
-        priority: taskPriority,
+        priority: taskPriority as any,
         department: taskDept,
         dueDate: taskDueDate.trim(),
-        assignedTo: taskAssignedTo ? parseInt(taskAssignedTo) : null,
+        assignedTo: taskAssignedTo || null,
+        assignedUserName: assignedUser?.name,
+        assignedUserEmail: assignedUser?.email,
+        assignedUserForenclueId: assignedUser?.forenclueId,
+        assignedUserRole: assignedUser?.role,
         notes: taskNotes.trim(),
       };
 
       if (editingTask) {
         // Update task
-        const res = await fetch(formatApiUrl(`/api/tasks/${editingTask.id}`), {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-          const updated = await res.json();
-          setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
-          const allottedMember = members.find(m => m.id === updated.assignedTo);
-          showToast(
-            allottedMember 
-              ? `Task updated and allotted to ${allottedMember.name} (${allottedMember.forenclueId}). Notification sent!`
-              : 'Task updated successfully.'
-          );
-        }
+        await updateFirestoreTask(editingTask.id, payload);
+        showToast(
+          assignedUser 
+            ? `Task updated and allotted to ${assignedUser.name} (${assignedUser.forenclueId}). Notification sent!`
+            : 'Task updated successfully.'
+        );
       } else {
         // Create task
-        const res = await fetch(formatApiUrl('/api/tasks'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-          const created = await res.json();
-          setTasks(prev => [created, ...prev]);
-          const allottedMember = members.find(m => m.id === created.assignedTo);
-          showToast(
-            allottedMember 
-              ? `Task allotted to ${allottedMember.name} (${allottedMember.forenclueId}). Real-time panel alert sent!` 
-              : 'Task created in workspace pool.'
-          );
-        }
+        payload.createdBy = user.id;
+        payload.creatorName = user.name;
+        payload.creatorForenclueId = user.forenclueId;
+        payload.status = 'TODO';
+        
+        await createFirestoreTask(payload);
+        showToast(
+          assignedUser 
+            ? `Task allotted to ${assignedUser.name} (${assignedUser.forenclueId}). Real-time panel alert sent!` 
+            : 'Task created in workspace pool.'
+        );
       }
 
       setShowAllotModal(false);
@@ -249,40 +222,22 @@ export const Tasks: React.FC = () => {
   };
 
   // Status Change (Member or Superadmin)
-  const handleUpdateStatus = async (taskId: number, newStatus: 'TODO' | 'IN_PROGRESS' | 'COMPLETED') => {
-    if (!token) return;
+  const handleUpdateStatus = async (taskId: any, newStatus: 'TODO' | 'IN_PROGRESS' | 'COMPLETED' | 'SUBMITTED' | 'UNDER REVIEW') => {
+    if (!user) return;
     try {
-      const res = await fetch(formatApiUrl(`/api/tasks/${taskId}`), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-
-      if (res.ok) {
-        const updated = await res.json();
-        setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
-        showToast(`Task status updated to ${newStatus.replace('_', ' ')}.`);
-      }
+      await updateFirestoreTask(taskId, { status: newStatus as any });
+      showToast(`Task status updated to ${newStatus.replace('_', ' ')}.`);
     } catch (err) {
       console.error(err);
     }
   };
 
   // Delete Task (Superadmin)
-  const handleDeleteTask = async (taskId: number) => {
-    if (!token || !window.confirm('Are you sure you want to delete this workspace task?')) return;
+  const handleDeleteTask = async (taskId: any) => {
+    if (!user || !window.confirm('Are you sure you want to delete this workspace task?')) return;
     try {
-      const res = await fetch(formatApiUrl(`/api/tasks/${taskId}`), {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setTasks(prev => prev.filter(t => t.id !== taskId));
-        showToast('Task removed from workspace.');
-      }
+      await deleteFirestoreTask(taskId);
+      showToast('Task removed from workspace.');
     } catch (err) {
       console.error(err);
     }
@@ -291,27 +246,12 @@ export const Tasks: React.FC = () => {
   // Save Deliverable Submission Notes (Member)
   const handleSaveDeliverableNotes = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!showDeliverableModal || !token) return;
+    if (!showDeliverableModal || !user) return;
     try {
       setActionLoading(true);
-      const res = await fetch(formatApiUrl(`/api/tasks/${showDeliverableModal.id}`), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          notes: deliverableNotes.trim(),
-          status: 'COMPLETED'
-        })
-      });
-
-      if (res.ok) {
-        const updated = await res.json();
-        setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
-        setShowDeliverableModal(null);
-        showToast('Deliverable notes submitted & marked completed! Super Admin notified.');
-      }
+      await submitTaskDeliverable(showDeliverableModal.id, deliverableNotes.trim());
+      setShowDeliverableModal(null);
+      showToast('Deliverable notes submitted & marked completed! Super Admin notified.');
     } catch (err) {
       console.error(err);
     } finally {

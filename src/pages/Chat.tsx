@@ -27,7 +27,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { formatApiUrl } from '../lib/api';
+import { apiFetch } from '../lib/api';
 
 interface ChatMember {
   id: number;
@@ -193,7 +193,7 @@ export const Chat = () => {
     }
 
     try {
-      const res = await fetch(formatApiUrl('/api/chat/groups'), {
+      const res = await apiFetch('/api/chat/groups', {
         headers: { Authorization: `Bearer ${token}` },
         signal
       });
@@ -209,7 +209,7 @@ export const Chat = () => {
       // If user requested direct chat with a mentor / member (via ?directUser=...)
       if (targetDirectUser) {
         try {
-          const directRes = await fetch(formatApiUrl('/api/chat/direct'), {
+          const directRes = await apiFetch('/api/chat/direct', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -274,7 +274,7 @@ export const Chat = () => {
   const fetchUsers = async (signal?: AbortSignal) => {
     if (!token) return;
     try {
-      const res = await fetch(formatApiUrl('/api/users'), {
+      const res = await apiFetch('/api/users', {
         headers: { Authorization: `Bearer ${token}` },
         signal
       });
@@ -311,7 +311,7 @@ export const Chat = () => {
   const fetchMessages = async (groupId: number, signal?: AbortSignal) => {
     if (!token || !groupId || isNaN(groupId) || groupId <= 0) return;
     try {
-      const res = await fetch(formatApiUrl(`/api/chat/groups/${groupId}/messages`), {
+      const res = await apiFetch(`/api/chat/groups/${groupId}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
         signal
       });
@@ -367,7 +367,7 @@ export const Chat = () => {
       if (selectedFile) {
         const formData = new FormData();
         formData.append('file', selectedFile);
-        const uploadRes = await fetch(formatApiUrl('/api/upload'), {
+        const uploadRes = await apiFetch('/api/upload', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: formData
@@ -379,7 +379,7 @@ export const Chat = () => {
         }
       }
 
-      const res = await fetch(formatApiUrl(`/api/chat/groups/${activeGroup.id}/messages`), {
+      const res = await apiFetch(`/api/chat/groups/${activeGroup.id}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -527,7 +527,7 @@ export const Chat = () => {
     }
 
     try {
-      const res = await fetch(formatApiUrl('/api/chat/groups'), {
+      const res = await apiFetch('/api/chat/groups', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -569,7 +569,7 @@ export const Chat = () => {
     setAddMemberError('');
 
     try {
-      const res = await fetch(formatApiUrl(`/api/chat/groups/${activeGroup.id}/members`), {
+      const res = await apiFetch(`/api/chat/groups/${activeGroup.id}/members`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -603,7 +603,7 @@ export const Chat = () => {
     }
 
     try {
-      const res = await fetch(formatApiUrl(`/api/chat/groups/${activeGroup.id}/members/${targetUserId}`), {
+      const res = await apiFetch(`/api/chat/groups/${activeGroup.id}/members/${targetUserId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -632,7 +632,7 @@ export const Chat = () => {
     }
 
     try {
-      const res = await fetch(formatApiUrl(`/api/chat/groups/${activeGroup.id}`), {
+      const res = await apiFetch(`/api/chat/groups/${activeGroup.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -663,7 +663,7 @@ export const Chat = () => {
     }
 
     try {
-      const res = await fetch(formatApiUrl(`/api/chat/groups/${groupId}`), {
+      const res = await apiFetch(`/api/chat/groups/${groupId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });

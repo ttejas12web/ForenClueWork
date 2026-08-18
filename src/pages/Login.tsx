@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { apiFetch } from '../lib/api';
-import { Fingerprint, Lock, Mail, AlertCircle, Shield, ArrowRight, UserCheck } from 'lucide-react';
+import { authenticateWithFirestore } from '../lib/firestoreService';
+import { Lock, Mail, AlertCircle, Shield, ArrowRight } from 'lucide-react';
+import { User } from '../types';
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -18,24 +19,16 @@ export const Login = () => {
     setLoading(true);
 
     try {
-      const data = await apiFetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password }),
-      });
-
-      login(data.token, data.user);
+      const user = await authenticateWithFirestore(identifier, password);
+      const token = `fc_token_${user.id}_${Date.now()}`;
+      login(token, user as unknown as User);
       navigate('/');
     } catch (err: any) {
+      console.error('Login error:', err);
       setError(err.message || 'Failed to login. Please check your credentials.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickLogin = (id: string, pass: string) => {
-    setIdentifier(id);
-    setPassword(pass);
   };
 
   return (
@@ -88,7 +81,7 @@ export const Login = () => {
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="appearance-none block w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-xs transition-all"
-                  placeholder="e.g. FC-VOL-2026-025 or FC-EMP-2026-001"
+                  placeholder="e.g. ttapse12@gmail.com or FC-EMP-2026-001"
                 />
               </div>
             </div>
@@ -118,16 +111,15 @@ export const Login = () => {
 
           <div>
             <button
+              id="login-submit-btn"
               type="submit"
               disabled={loading}
               className="w-full flex justify-center items-center py-2.5 px-4 rounded-xl shadow-md shadow-blue-600/20 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all disabled:opacity-50 cursor-pointer min-h-[44px]"
             >
-              {loading ? 'Authenticating...' : 'Sign in to Workspace'}
+              {loading ? 'Authenticating with Firebase...' : 'Sign in to Workspace'}
             </button>
           </div>
         </form>
-
-
 
         <div className="text-center text-[10px] text-slate-400">
           Internal ForenClue System • Authorized Personnel Only

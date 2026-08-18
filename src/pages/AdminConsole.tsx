@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { formatApiUrl } from '../lib/api';
+import { apiFetch } from '../lib/api';
 import { User, Role } from '../types';
 import { 
   Users, 
@@ -57,7 +57,7 @@ export const AdminConsole = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(formatApiUrl('/api/users'), {
+      const res = await apiFetch('/api/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -109,7 +109,7 @@ export const AdminConsole = () => {
   const handleDepartmentChange = async (userId: string | number, department: string) => {
     setUpdatingDeptId(Number(userId));
     try {
-      const res = await fetch(formatApiUrl(`/api/users/${userId}/department`), {
+      const res = await apiFetch(`/api/users/${userId}/department`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -135,7 +135,7 @@ export const AdminConsole = () => {
     setFormLoading(true);
 
     try {
-      const res = await fetch(formatApiUrl('/api/auth/register'), {
+      const res = await apiFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { MemberInfographicHub } from '../components/MemberInfographicHub';
-import { formatApiUrl } from '../lib/api';
+import { subscribeToTasks, subscribeToUsers, subscribeToChatGroups, FirestoreTask } from '../lib/firestoreService';
 import { 
   CheckSquare, 
   Users, 
@@ -27,12 +27,12 @@ import {
 import { Link } from 'react-router-dom';
 
 interface DashboardTask {
-  id: number;
+  id: any;
   title: string;
   description: string | null;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
-  assignedTo: number | null;
+  assignedTo: any;
   department: string | null;
   dueDate: string | null;
   assignedUserName?: string;
@@ -53,42 +53,36 @@ export const Dashboard = () => {
   const isAdmin = user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
-    if (!token) return;
+    if (!user) return;
 
-    // Fetch users count if admin
-    if (isAdmin) {
-      fetch(formatApiUrl('/api/users'), { headers: { Authorization: `Bearer ${token}` } })
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) {
-            setTotalUsers(data.length);
-          }
-        })
-        .catch(() => {});
-    }
+    // Subscribe to users for live count
+    const unsubUsers = subscribeToUsers((usersList) => {
+      setTotalUsers(usersList.length);
+    });
 
-    // Fetch groups for live preview
-    fetch(formatApiUrl('/api/chat/groups'), { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setActiveGroupsCount(data.length);
-          setRecentGroups(data.slice(0, 3));
-        }
-      })
-      .catch(() => {});
+    // Subscribe to chat groups
+    const unsubGroups = subscribeToChatGroups(user.id, (groupsList) => {
+      setActiveGroupsCount(groupsList.length);
+      setRecentGroups(groupsList.slice(0, 3));
+    });
 
-    // Fetch tasks (Admin gets all, member gets ONLY tasks allotted to him)
-    fetch(formatApiUrl('/api/tasks'), { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setTasks(data);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setTasksLoading(false));
-  }, [user, token, isAdmin]);
+    // Subscribe to tasks
+    const unsubTasks = subscribeToTasks((tasksList) => {
+      const mapped = tasksList.map(t => ({
+        ...t,
+        id: t.id,
+        status: (t.status === 'COMPLETED' ? 'COMPLETED' : (t.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'TODO')) as any
+      }));
+      setTasks(mapped);
+      setTasksLoading(false);
+    }, user.id, user.role);
+
+    return () => {
+      unsubUsers();
+      unsubGroups();
+      unsubTasks();
+    };
+  }, [user]);
 
   const getTimeGreeting = () => {
     const hour = new Date().getHours();

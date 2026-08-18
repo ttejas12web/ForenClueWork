@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { formatApiUrl } from '../lib/api';
+import { apiFetch } from '../lib/api';
 import { Lock, ShieldCheck, AlertCircle, Eye, EyeOff, KeyRound, CheckCircle2, ArrowRight } from 'lucide-react';
 
 export const ForcePasswordChange = () => {
@@ -36,7 +36,7 @@ export const ForcePasswordChange = () => {
     try {
       if (user) {
         const token = localStorage.getItem('auth_token');
-        const res = await fetch(formatApiUrl('/api/auth/update-password'), {
+        const res = await apiFetch('/api/auth/update-password', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -64,7 +64,7 @@ export const ForcePasswordChange = () => {
     setSkipping(true);
     try {
       const token = localStorage.getItem('auth_token');
-      const res = await fetch(formatApiUrl('/api/auth/skip-password-change'), {
+      const res = await apiFetch('/api/auth/skip-password-change', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

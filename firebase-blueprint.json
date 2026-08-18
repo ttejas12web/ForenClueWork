@@ -1,0 +1,156 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "ForenClue workspace user account",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "User identifier" },
+        "forenclueId": { "type": "string", "description": "Employee ID (e.g. FC-EMP-2026-001)" },
+        "name": { "type": "string", "description": "Full name", "maxLength": 100 },
+        "email": { "type": "string", "description": "Email address", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "MENTOR", "EMPLOYEE", "VOLUNTEER", "CAMPUS_AMBASSADOR"] },
+        "department": { "type": "string", "maxLength": 100 },
+        "designation": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "bio": { "type": "string", "maxLength": 1000 },
+        "profilePhoto": { "type": "string", "maxLength": 1000 },
+        "isDefaultPassword": { "type": "boolean" },
+        "tempPasswordChanged": { "type": "boolean" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["forenclueId", "name", "email", "role"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Workspace task and deliverable allotment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Task identifier" },
+        "title": { "type": "string", "description": "Task title", "maxLength": 200 },
+        "description": { "type": "string", "description": "Task description", "maxLength": 5000 },
+        "priority": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "URGENT"] },
+        "status": { "type": "string", "enum": ["TODO", "IN_PROGRESS", "COMPLETED", "SUBMITTED", "UNDER REVIEW"] },
+        "assignedTo": { "type": "string", "description": "User ID of the assigned member" },
+        "assignedUserName": { "type": "string" },
+        "assignedUserEmail": { "type": "string" },
+        "assignedUserForenclueId": { "type": "string" },
+        "assignedUserRole": { "type": "string" },
+        "department": { "type": "string", "maxLength": 100 },
+        "dueDate": { "type": "string", "maxLength": 50 },
+        "createdBy": { "type": "string", "description": "User ID of the task creator" },
+        "creatorName": { "type": "string" },
+        "notes": { "type": "string", "maxLength": 5000 },
+        "deliverableNotes": { "type": "string", "maxLength": 5000 },
+        "deliverableLink": { "type": "string", "maxLength": 1000 },
+        "deliverableAttachmentUrl": { "type": "string", "maxLength": 1000 },
+        "submittedAt": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "priority", "status"]
+    },
+    "ChatGroup": {
+      "title": "ChatGroup",
+      "description": "Chat channel or direct message thread",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Group identifier" },
+        "name": { "type": "string", "description": "Channel name", "maxLength": 100 },
+        "type": { "type": "string", "enum": ["GENERAL", "DIRECT", "DEPARTMENT", "CUSTOM"] },
+        "department": { "type": "string", "maxLength": 100 },
+        "isDirect": { "type": "boolean" },
+        "createdBy": { "type": "string" },
+        "memberIds": { "type": "array" },
+        "members": { "type": "array" },
+        "lastMessage": { "type": "object" },
+        "lastMessageText": { "type": "string", "maxLength": 1000 },
+        "lastMessageAt": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "type"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Message in a chat group",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Message identifier" },
+        "groupId": { "type": "string", "description": "Group ID reference" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "senderEmail": { "type": "string" },
+        "senderForenclueId": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "senderAvatar": { "type": "string" },
+        "content": { "type": "string", "maxLength": 5000 },
+        "attachmentUrl": { "type": "string" },
+        "attachmentName": { "type": "string" },
+        "attachmentType": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["groupId", "senderId", "content"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Workspace-wide or targeted bulletin announcement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "content": { "type": "string", "maxLength": 10000 },
+        "author": { "type": "string" },
+        "authorId": { "type": "string" },
+        "priority": { "type": "string", "enum": ["NORMAL", "HIGH", "URGENT"] },
+        "date": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "content", "author"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Member notification alert",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" },
+        "link": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "title", "message"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and credentials"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Workspace task documents"
+    },
+    "/chat_groups/{groupId}": {
+      "schema": "ChatGroup",
+      "description": "Chat channels and direct conversations"
+    },
+    "/chat_groups/{groupId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages belonging to a chat group"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Workspace bulletin announcements"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Personal member notifications"
+    }
+  }
+}
