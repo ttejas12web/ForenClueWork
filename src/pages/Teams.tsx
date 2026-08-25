@@ -12,19 +12,23 @@ import {
   Crown,
   UserCheck,
   ExternalLink,
-  User
+  User,
+  PlusCircle,
+  RefreshCw
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
+import { fetchAllUsers, subscribeToUsers, FirestoreUser } from '../lib/firestoreService';
 
 interface TeamMember {
-  id: number;
+  id: string | number;
   forenclueId: string;
   name: string;
   email: string;
   role: string;
   department?: string;
+  designation?: string;
   active?: boolean;
 }
 
@@ -101,35 +105,96 @@ export const Teams = () => {
     },
   ];
 
-  useEffect(() => {
-    apiFetch('/api/users', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
+  const loadMembersData = async () => {
+    try {
+      // 1. Direct Firestore Fetch for guaranteed availability
+      const firestoreUsers = await fetchAllUsers();
+      if (firestoreUsers && firestoreUsers.length > 0) {
+        setMembers(firestoreUsers as any);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.warn("Direct Firestore users fetch notice:", e);
+    }
+
+    // 2. Fallback via apiFetch
+    try {
+      const res = await apiFetch('/api/users', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
           setMembers(data);
         }
-      })
-      .catch((err) => {
-        console.error("Failed to load department users:", err);
-      })
-      .finally(() => setLoading(false));
+      }
+    } catch (err) {
+      console.error("Failed to load department users:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMembersData();
+
+    // Subscribe to realtime updates
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = subscribeToUsers((liveUsers) => {
+        if (liveUsers && liveUsers.length > 0) {
+          setMembers(liveUsers as any);
+          setLoading(false);
+        }
+      });
+    } catch (err) {
+      console.warn("Live users subscription fallback:", err);
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [token]);
 
-  const getDeptMembers = (deptName: string) => {
-    return members.filter(m => m.department === deptName);
+  const getDeptMembers = (deptName: string): TeamMember[] => {
+    const deptInfo = departments.find(d => d.name.toLowerCase() === deptName.toLowerCase());
+    const seen = new Set<string>();
+
+    return members.filter(m => {
+      if (!m || !m.name) return false;
+      const memId = String(m.forenclueId || m.id || m.email);
+      if (seen.has(memId)) return false;
+
+      // 1. Department match (case-insensitive & trimmed)
+      const matchesDeptName = m.department && m.department.trim().toLowerCase() === deptName.trim().toLowerCase();
+
+      // 2. Mentor designated for this department
+      const matchesMentor = deptInfo && (
+        (m.forenclueId && m.forenclueId.trim().toUpperCase() === deptInfo.mentorId.trim().toUpperCase()) ||
+        (m.email && m.email.trim().toLowerCase() === deptInfo.mentorEmail.trim().toLowerCase())
+      );
+
+      if (matchesDeptName || matchesMentor) {
+        seen.add(memId);
+        return true;
+      }
+      return false;
+    });
   };
 
   const activeDeptData = departments.find(d => d.name === selectedDept) || departments[0];
 
-  const activeDeptMembers = members.filter(m => {
-    const matchesDept = m.department === selectedDept;
-    const matchesSearch = searchMember 
-      ? m.name.toLowerCase().includes(searchMember.toLowerCase()) || 
-        m.forenclueId.toLowerCase().includes(searchMember.toLowerCase())
-      : true;
-    return matchesDept && matchesSearch;
+  const activeDeptMembers = getDeptMembers(selectedDept).filter(m => {
+    if (!searchMember.trim()) return true;
+    const query = searchMember.toLowerCase().trim();
+    return (
+      (m.name && m.name.toLowerCase().includes(query)) ||
+      (m.forenclueId && m.forenclueId.toLowerCase().includes(query)) ||
+      (m.email && m.email.toLowerCase().includes(query)) ||
+      (m.role && m.role.toLowerCase().includes(query)) ||
+      (m.designation && m.designation.toLowerCase().includes(query))
+    );
   });
 
   const handleViewRoster = (deptName: string, e?: React.MouseEvent) => {
@@ -152,13 +217,35 @@ export const Teams = () => {
           </p>
         </div>
 
-        <Link
-          to={`/chat?group=${encodeURIComponent(selectedDept)}`}
-          className="flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer self-start sm:self-auto min-h-[40px]"
-        >
-          <MessageSquare className="h-4 w-4" />
-          <span>Open Department Chat</span>
-        </Link>
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={loadMembersData}
+            title="Refresh member lists"
+            className="p-2 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer flex items-center space-x-1"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+
+          {(user?.role === 'SUPER_ADMIN' || user?.role === 'MENTOR') && (
+            <Link
+              to="/admin"
+              className="flex items-center space-x-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>Manage Members</span>
+            </Link>
+          )}
+
+          <Link
+            to={`/chat?group=${encodeURIComponent(selectedDept)}`}
+            className="flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer min-h-[38px]"
+          >
+            <MessageSquare className="h-4 w-4" />
+            <span>Department Chat</span>
+          </Link>
+        </div>
       </div>
 
       {/* Department Cards Grid */}
@@ -352,7 +439,7 @@ export const Teams = () => {
                       {member.name.charAt(0)}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center space-x-1.5">
+                      <div className="flex items-center space-x-1.5 flex-wrap">
                         <h4 className="text-xs font-bold text-slate-900 truncate">{member.name}</h4>
                         <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
                           member.role === 'SUPER_ADMIN' 
@@ -367,6 +454,16 @@ export const Teams = () => {
                       <p className="text-[11px] font-mono font-bold text-blue-600 mt-0.5">
                         {member.forenclueId}
                       </p>
+                      {member.designation && (
+                        <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                          {member.designation}
+                        </p>
+                      )}
+                      {member.email && (
+                        <p className="text-[10px] text-slate-400 truncate">
+                          {member.email}
+                        </p>
+                      )}
                     </div>
                   </div>
 

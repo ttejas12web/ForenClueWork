@@ -60,8 +60,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
   const method = (options.method || 'GET').toUpperCase();
   const cleanEndpoint = endpoint.split('?')[0].replace(/\/+$/, '');
 
-  // 1. If running on a static domain without a dedicated backend server,
-  // route directly through Firebase Firestore!
+  // 1. If running on a static domain without a dedicated backend server or auth login
   try {
     const isStaticDeployment = !getApiBaseUrl() || window.location.hostname.includes('forenclue.in') || window.location.hostname.includes('pages.dev');
     
@@ -86,11 +85,16 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
       },
     });
 
-    if (!res.ok) {
-      if (res.status === 405 || isStaticDeployment) {
-        const fallbackData = await handleFirestoreFallback(cleanEndpoint, method, options);
-        return new Response(JSON.stringify(fallbackData), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
+    const contentType = res.headers.get('content-type') || '';
+    const isHtmlResponse = contentType.includes('text/html') || contentType.includes('text/plain');
+
+    // If fetch returned error or served the static SPA HTML page instead of API JSON, route through Firestore fallback
+    if (!res.ok || (cleanEndpoint.startsWith('/api/') && isHtmlResponse)) {
+      const fallbackData = await handleFirestoreFallback(cleanEndpoint, method, options);
+      return new Response(JSON.stringify(fallbackData), { 
+        status: 200, 
+        headers: { 'Content-Type': 'application/json' } 
+      });
     }
     return res;
   } catch (err: any) {
