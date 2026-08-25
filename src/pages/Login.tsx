@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { authenticateWithFirestore } from '../lib/firestoreService';
-import { Lock, Mail, AlertCircle, Shield, ArrowRight } from 'lucide-react';
+import { Lock, Mail, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { User } from '../types';
 
 export const Login = () => {
@@ -10,11 +10,12 @@ export const Login = () => {
   const { login } = useAuthStore();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError('');
     setLoading(true);
 
@@ -67,7 +68,7 @@ export const Login = () => {
           </p>
         </div>
 
-        <form className="mt-6 space-y-4" onSubmit={handleLogin}>
+        <form className="space-y-4" onSubmit={(e) => handleLogin(e)}>
           {error && (
             <div className="rounded-xl bg-rose-50 p-3.5 border border-rose-200 flex items-start">
               <AlertCircle className="h-4 w-4 text-rose-600 mt-0.5 mr-2 flex-shrink-0" />
@@ -93,15 +94,17 @@ export const Login = () => {
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="appearance-none block w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-xs transition-all"
-                  placeholder="e.g. ttapse12@gmail.com or FC-EMP-2026-001"
+                  placeholder="e.g. employee@forenclue.in or FC-EMP-2026-001"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="password">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700" htmlFor="password">
+                  Password
+                </label>
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Lock className="h-4 w-4 text-slate-400" />
@@ -109,14 +112,21 @@ export const Login = () => {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-xs transition-all"
+                  className="appearance-none block w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-xs transition-all"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             </div>
           </div>
@@ -128,7 +138,7 @@ export const Login = () => {
               disabled={loading}
               className="w-full flex justify-center items-center py-2.5 px-4 rounded-xl shadow-md shadow-blue-600/20 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all disabled:opacity-50 cursor-pointer min-h-[44px]"
             >
-              {loading ? 'Authenticating with Firebase...' : 'Sign in to Workspace'}
+              {loading ? 'Authenticating...' : 'Sign in to Workspace'}
             </button>
           </div>
         </form>

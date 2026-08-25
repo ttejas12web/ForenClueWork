@@ -211,8 +211,8 @@ export const Projects = () => {
                   <option value="Cyber & Digital Forensics">Cyber & Digital Forensics</option>
                   <option value="Case Study">Case Study</option>
                   <option value="Research">Research</option>
-                  <option value="Events & Webinars">Events & Webinars</option>
-                  <option value="Creative & Design">Creative & Design</option>
+                  <option value="Events & Management">Events & Management</option>
+                  <option value="Creative & Graphics">Creative & Graphics</option>
                 </select>
               </div>
 

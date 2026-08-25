@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import config from '../../firebase-applet-config.json';
 
@@ -10,7 +10,9 @@ export const auth = getAuth(app);
 export const googleAuthProvider = new GoogleAuthProvider();
 
 // Connect to the specific Firestore database instance
-export const db = getFirestore(app, config.firestoreDatabaseId || undefined);
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true
+}, config.firestoreDatabaseId || undefined);
 export const storage = getStorage(app);
 
 // Connectivity validation helper

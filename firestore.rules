@@ -26,9 +26,9 @@ service cloud.firestore {
       // Allow user creation by admins or initial self-registration/seed
       allow create: if true;
       // Allow user profile updates
-      allow update: if isSignedIn() || isSuperAdmin();
+      allow update: if true;
       // Allow user deletion by superadmin
-      allow delete: if isSignedIn();
+      allow delete: if true;
     }
 
     // Tasks & Deliverables

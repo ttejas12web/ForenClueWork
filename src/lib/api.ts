@@ -13,8 +13,12 @@ import {
   createFirestoreChatGroup,
   getOrCreateDirectChat,
   sendFirestoreMessage,
-  deleteFirestoreChatGroup
+  deleteFirestoreChatGroup,
+  updateFirestoreChatGroup,
+  addFirestoreChatGroupMembers,
+  removeFirestoreChatGroupMember
 } from './firestoreService';
+import { uploadWorkspaceFile } from './storageService';
 
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
@@ -56,7 +60,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
   const method = (options.method || 'GET').toUpperCase();
   const cleanEndpoint = endpoint.split('?')[0].replace(/\/+$/, '');
 
-  // 1. If running on a static domain or Cloudflare pages without a dedicated backend server,
+  // 1. If running on a static domain without a dedicated backend server,
   // route directly through Firebase Firestore!
   try {
     const isStaticDeployment = !getApiBaseUrl() || window.location.hostname.includes('forenclue.in') || window.location.hostname.includes('pages.dev');
@@ -132,13 +136,127 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
   if (endpoint === '/api/upload' && method === 'POST') {
     if (options.body && options.body instanceof FormData) {
       const file = options.body.get('file') as File;
+      const folder = (options.body.get('folder') as string) || 'uploads';
       if (file) {
-        // Create a local object URL to serve as a mock uploaded image/file
-        const mockUrl = URL.createObjectURL(file);
-        return { success: true, url: mockUrl };
+        const uploadResult = await uploadWorkspaceFile(file, file.name, folder);
+        return {
+          success: true,
+          url: uploadResult.url,
+          name: uploadResult.name,
+          size: uploadResult.size,
+          type: uploadResult.type,
+          provider: uploadResult.storageProvider
+        };
       }
     }
     return { success: true, url: 'https://via.placeholder.com/150' };
+  }
+
+  if (endpoint === '/api/analytics/workspace-insights' && method === 'GET') {
+    const allTasks = (await fetchAllTasks()) || [];
+    const allUsers = (await fetchAllUsers()) || [];
+    const userId = localStorage.getItem('auth_user_id') || '';
+    const userTasks = allTasks.filter((t: any) => t.assignedTo === userId);
+    
+    const DEPARTMENTS = [
+      'Creative & Graphics',
+      'Case Study',
+      'Research',
+      'Events & Management',
+      'Cyber & Digital Forensics'
+    ];
+
+    const departmentStats = DEPARTMENTS.map(deptName => {
+      const deptTasks = allTasks.filter((t: any) => t.department === deptName);
+      const completed = deptTasks.filter((t: any) => t.status === 'COMPLETED').length;
+      const deptUsers = allUsers.filter((u: any) => u.department === deptName && u.active !== false);
+      const score = deptTasks.length > 0 ? Math.round((completed / deptTasks.length) * 100) : 0;
+      return {
+        name: deptName,
+        totalTasks: deptTasks.length,
+        completedTasks: completed,
+        activeUsers: deptUsers.length,
+        score
+      };
+    });
+
+    const totalWorkspaceTasks = allTasks.length;
+    const totalCompleted = allTasks.filter((t: any) => t.status === 'COMPLETED').length;
+    const totalInProgress = allTasks.filter((t: any) => t.status === 'IN_PROGRESS').length;
+    const totalTodo = allTasks.filter((t: any) => t.status === 'TODO').length;
+
+    const userCompleted = userTasks.filter((t: any) => t.status === 'COMPLETED').length;
+    const userInProgress = userTasks.filter((t: any) => t.status === 'IN_PROGRESS').length;
+    const userTodo = userTasks.filter((t: any) => t.status === 'TODO').length;
+
+    const now = new Date();
+
+    const formattedUserTasks = userTasks.map((t: any) => {
+      let daysRemaining: number | null = null;
+      let isOverdue = false;
+      let deadlineStatus = 'ON_TRACK';
+      let urgencyColor = 'bg-slate-500 text-white';
+
+      if (t.dueDate) {
+        const due = new Date(t.dueDate);
+        if (!isNaN(due.getTime())) {
+          const diffMs = due.getTime() - now.getTime();
+          daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          if (daysRemaining < 0 && t.status !== 'COMPLETED') {
+            isOverdue = true;
+            deadlineStatus = 'OVERDUE';
+            urgencyColor = 'bg-rose-500 text-white';
+          } else if (daysRemaining <= 3 && t.status !== 'COMPLETED') {
+            deadlineStatus = 'URGENT';
+            urgencyColor = 'bg-amber-500 text-white';
+          } else {
+            deadlineStatus = 'ON_TRACK';
+            urgencyColor = 'bg-emerald-500 text-white';
+          }
+        }
+      }
+
+      return {
+        id: t.id,
+        title: t.title || 'Untitled Task',
+        description: t.description || null,
+        priority: t.priority || 'MEDIUM',
+        status: t.status || 'TODO',
+        department: t.department || null,
+        dueDate: t.dueDate || null,
+        notes: t.notes || null,
+        daysRemaining,
+        deadlineStatus,
+        isOverdue,
+        urgencyColor
+      };
+    });
+
+    const userOnTimeRate = userTasks.length > 0 
+      ? Math.round((userCompleted / userTasks.length) * 100) 
+      : 0;
+
+    return {
+      departmentStats,
+      leaderboard: [],
+      teamBenchmark: {
+        totalWorkspaceTasks,
+        totalCompleted,
+        totalInProgress,
+        totalTodo,
+        overallOnTimeRate: totalWorkspaceTasks > 0 ? Math.round((totalCompleted / totalWorkspaceTasks) * 100) : 0,
+        turnaroundAverageDays: 0,
+        activeSprintVelocity: totalCompleted
+      },
+      userMetrics: {
+        totalAllotted: userTasks.length,
+        completed: userCompleted,
+        inProgress: userInProgress,
+        todo: userTodo,
+        onTimeRate: userOnTimeRate,
+        tasks: formattedUserTasks
+      }
+    };
   }
 
   if (endpoint === '/api/tasks' && method === 'GET') {
@@ -167,33 +285,106 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
   }
 
   if (endpoint === '/api/chat/groups' && method === 'POST') {
-    return await createFirestoreChatGroup(body);
+    const creatorUser = await fetchAllUsers().then(users => users.find(u => u.id === (body.creatorId || localStorage.getItem('auth_user_id'))));
+    return await createFirestoreChatGroup(body.name, body.type, body.department, creatorUser as any, body.initialMemberIds || []);
   }
 
   if (endpoint === '/api/chat/direct' && method === 'POST') {
     const userId = localStorage.getItem('auth_user_id') || 'user_admin_001';
-    return await getOrCreateDirectChat(userId, body.targetForenclueId);
+    const users = await fetchAllUsers();
+    const currentUser = users.find(u => u.id === userId);
+    const targetUser = users.find(u => u.forenclueId === body.targetForenclueId);
+    if (!currentUser || !targetUser) throw new Error('User not found');
+    return await getOrCreateDirectChat(currentUser as any, targetUser as any);
   }
 
   if (endpoint.startsWith('/api/chat/groups/') && endpoint.endsWith('/messages') && method === 'GET') {
-    // Return empty array for now or try to fetch once using db
-    const { getDocs, collection, query, where, orderBy, limit } = await import('firebase/firestore');
+    const { getDocs, collection, query, orderBy, limit, doc, getDoc } = await import('firebase/firestore');
     const { db } = await import('./firebase');
+    const { decryptText } = await import('./firestoreService');
     const groupId = endpoint.split('/')[4];
+    
+    // Check if group is E2EE
+    const groupDoc = await getDoc(doc(db, 'chat_groups', groupId));
+    const groupData = groupDoc.data();
+    const isE2EE = groupData?.isE2EE;
+
     const q = query(
-      collection(db, 'chat_messages'),
-      where('groupId', '==', groupId),
+      collection(db, `chat_groups/${groupId}/messages`),
       orderBy('createdAt', 'asc'),
       limit(100)
     );
     const snap = await getDocs(q);
-    return snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    
+    return snap.docs.map(docSnapshot => {
+      const d: any = { ...docSnapshot.data(), id: docSnapshot.id };
+      if (isE2EE && groupData?.memberIds && typeof d.content === 'string' && d.content.startsWith('E2EE:')) {
+         const key = groupData.memberIds.slice(0, 2).sort().join('_') + "_secret";
+         d.content = decryptText(d.content, key);
+      }
+      return d;
+    });
   }
 
   if (endpoint.startsWith('/api/chat/groups/') && endpoint.endsWith('/messages') && method === 'POST') {
     const groupId = endpoint.split('/')[4];
-    await sendFirestoreMessage(groupId, body.senderId, body.content, body.attachmentUrl, body.attachmentName);
+    const users = await fetchAllUsers();
+    const resolvedSenderId = body.senderId || localStorage.getItem('auth_user_id') || 'user_admin_001';
+    let sender = users.find(u => u.id === resolvedSenderId);
+    if (!sender) {
+      const storedUserStr = localStorage.getItem('auth_user');
+      if (storedUserStr) {
+        try {
+          const parsed = JSON.parse(storedUserStr);
+          if (parsed && (parsed.id || parsed.name)) {
+            sender = parsed;
+          }
+        } catch (e) {}
+      }
+    }
+    if (!sender) {
+      sender = users[0] || {
+        id: resolvedSenderId,
+        name: 'Workspace User',
+        email: 'user@forenclue.com',
+        forenclueId: resolvedSenderId,
+        role: 'VOLUNTEER' as const,
+      };
+    }
+    
+    let attachment: any = undefined;
+    if (body.attachmentUrl) {
+      attachment = {
+        url: body.attachmentUrl,
+        name: body.attachmentName || 'Attachment',
+        type: 'file'
+      };
+    }
+    const newMsg = await sendFirestoreMessage(groupId, sender, body.content || '', attachment);
+    return newMsg;
+  }
+
+  if (endpoint.startsWith('/api/chat/groups/') && endpoint.endsWith('/members') && method === 'POST') {
+    const groupId = endpoint.split('/')[4];
+    await addFirestoreChatGroupMembers(groupId, body.memberIds || []);
     return { success: true };
+  }
+
+  if (endpoint.startsWith('/api/chat/groups/') && endpoint.includes('/members/') && method === 'DELETE') {
+    const parts = endpoint.split('/');
+    const groupId = parts[4];
+    const targetUserId = parts[6];
+    await removeFirestoreChatGroupMember(groupId, targetUserId);
+    return { success: true };
+  }
+
+  if (endpoint.startsWith('/api/chat/groups/') && method === 'PUT') {
+    const parts = endpoint.split('/');
+    if (parts.length === 5) {
+      const groupId = parts[4];
+      await updateFirestoreChatGroup(groupId, body);
+      return { success: true };
+    }
   }
 
   if (endpoint.startsWith('/api/chat/groups/') && method === 'DELETE') {

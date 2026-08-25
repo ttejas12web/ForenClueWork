@@ -185,94 +185,104 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
 
           {/* Notifications Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in fade-in zoom-in duration-150">
-              <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <h4 className="text-xs font-bold text-slate-900">Workspace Panel Alerts</h4>
-                  {unreadCount > 0 && (
-                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">
-                      {unreadCount} new
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center space-x-2">
-                  {unreadCount > 0 && (
-                    <button 
-                      onClick={handleMarkAllRead}
-                      className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer flex items-center space-x-0.5"
-                      title="Mark all as read"
-                    >
-                      <CheckCheck className="h-3 w-3 mr-0.5" />
-                      <span>Mark all read</span>
-                    </button>
-                  )}
-                  <button 
-                    onClick={() => setShowNotifications(false)}
-                    className="text-slate-400 hover:text-slate-600 p-1"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
+            <>
+              {/* Backdrop for mobile & desktop outside click */}
+              <div 
+                className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-[1px] sm:bg-transparent"
+                onClick={() => setShowNotifications(false)}
+                aria-hidden="true"
+              />
 
-              <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100">
-                {notifications.length === 0 ? (
-                  <div className="py-8 px-4 text-center">
-                    <div className="h-10 w-10 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-2">
-                      <Bell className="h-5 w-5" />
-                    </div>
-                    <p className="text-xs font-bold text-slate-700">No Notifications Yet</p>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      When Super Admin allots tasks or updates your deliverables, alerts will appear here in your panel.
-                    </p>
+              <div className="fixed sm:absolute top-16 sm:top-full left-3 right-3 sm:left-auto sm:right-0 mt-1 sm:mt-2 max-w-[calc(100vw-24px)] sm:max-w-none sm:w-96 mx-auto sm:mx-0 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <h4 className="text-xs font-bold text-slate-900 truncate">Workspace Panel Alerts</h4>
+                    {unreadCount > 0 && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full flex-shrink-0">
+                        {unreadCount} new
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  notifications.map((notif) => (
-                    <div 
-                      key={notif.id}
-                      onClick={() => handleNotificationClick(notif)}
-                      className={`p-3.5 hover:bg-slate-50 transition-colors cursor-pointer text-left flex items-start space-x-3 ${
-                        !notif.read ? 'bg-blue-50/40 border-l-3 border-l-blue-600' : ''
-                      }`}
+                  <div className="flex items-center space-x-2 flex-shrink-0">
+                    {unreadCount > 0 && (
+                      <button 
+                        onClick={handleMarkAllRead}
+                        className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer flex items-center space-x-0.5"
+                        title="Mark all as read"
+                      >
+                        <CheckCheck className="h-3 w-3 mr-0.5" />
+                        <span>Mark read</span>
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => setShowNotifications(false)}
+                      className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200/60 transition-colors"
+                      aria-label="Close notifications"
                     >
-                      <div className={`h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                        notif.type === 'TASK_ASSIGNED'
-                          ? 'bg-blue-100 text-blue-700'
-                          : notif.type === 'TASK_UPDATE'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        <CheckSquare className="h-4 w-4" />
-                      </div>
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <p className={`text-xs font-bold truncate ${!notif.read ? 'text-blue-950' : 'text-slate-800'}`}>
-                            {notif.title}
-                          </p>
-                          <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                            {formatTimeAgo(notif.createdAt)}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 mt-0.5 line-clamp-2 leading-relaxed">
-                          {notif.message}
-                        </p>
+                <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 px-4 text-center">
+                      <div className="h-10 w-10 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <Bell className="h-5 w-5" />
                       </div>
+                      <p className="text-xs font-bold text-slate-700">No Notifications Yet</p>
+                      <p className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
+                        When Super Admin allots tasks or updates your deliverables, alerts will appear here in your panel.
+                      </p>
                     </div>
-                  ))
-                )}
-              </div>
+                  ) : (
+                    notifications.map((notif) => (
+                      <div 
+                        key={notif.id}
+                        onClick={() => handleNotificationClick(notif)}
+                        className={`p-3.5 hover:bg-slate-50 transition-colors cursor-pointer text-left flex items-start space-x-3 ${
+                          !notif.read ? 'bg-blue-50/40 border-l-3 border-l-blue-600' : ''
+                        }`}
+                      >
+                        <div className={`h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                          notif.type === 'TASK_ASSIGNED'
+                            ? 'bg-blue-100 text-blue-700'
+                            : notif.type === 'TASK_UPDATE'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          <CheckSquare className="h-4 w-4" />
+                        </div>
 
-              <div className="p-2.5 bg-slate-50 border-t border-slate-200 text-center">
-                <Link
-                  to="/tasks"
-                  onClick={() => setShowNotifications(false)}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-                >
-                  View Workspace Task Board →
-                </Link>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <p className={`text-xs font-bold truncate ${!notif.read ? 'text-blue-950' : 'text-slate-800'}`}>
+                              {notif.title}
+                            </p>
+                            <span className="text-[10px] text-slate-400 whitespace-nowrap flex-shrink-0">
+                              {formatTimeAgo(notif.createdAt)}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-0.5 line-clamp-2 leading-relaxed">
+                            {notif.message}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="p-2.5 bg-slate-50 border-t border-slate-200 text-center">
+                  <Link
+                    to="/tasks"
+                    onClick={() => setShowNotifications(false)}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                  >
+                    View Workspace Task Board →
+                  </Link>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 

@@ -24,13 +24,23 @@ import {
   Briefcase,
   Paperclip,
   FileText,
+  Lock,
   Image as ImageIcon
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { apiFetch } from '../lib/api';
+import { uploadWorkspaceFile } from '../lib/storageService';
+
+function formatAttachmentUrl(url?: string | null): string {
+  if (!url) return '';
+  if (url.startsWith('http://localhost:3000/') || url.startsWith('http://127.0.0.1:3000/')) {
+    return url.replace(/^http:\/\/(localhost|127\.0\.0\.1):3000/, '');
+  }
+  return url;
+}
 
 interface ChatMember {
-  id: number;
+  id: any;
   name: string;
   email: string;
   forenclueId: string;
@@ -39,12 +49,18 @@ interface ChatMember {
 }
 
 interface ChatGroup {
-  id: number;
+  id: any;
   name: string;
   displayName?: string;
   isDirect?: boolean;
+  department?: string;
+  mentorId?: string;
+  mentorName?: string;
+  mentorEmail?: string;
+  mentorForenclueId?: string;
+  adminIds?: string[];
   otherUser?: {
-    id: number;
+    id: any;
     name: string;
     email: string;
     forenclueId: string;
@@ -53,12 +69,12 @@ interface ChatGroup {
   } | null;
   description: string | null;
   avatarUrl: string | null;
-  createdBy: number;
+  createdBy: any;
   createdAt: string;
   memberCount: number;
   members: ChatMember[];
   lastMessage: {
-    id: number;
+    id: any;
     content: string;
     attachmentUrl?: string | null;
     attachmentName?: string | null;
@@ -69,9 +85,9 @@ interface ChatGroup {
 }
 
 interface ChatMessage {
-  id: number;
-  groupId: number;
-  senderId: number;
+  id: any;
+  groupId: any;
+  senderId: any;
   content: string;
   attachmentUrl?: string | null;
   attachmentName?: string | null;
@@ -127,14 +143,14 @@ export const Chat = () => {
   const [selectedPreset, setSelectedPreset] = useState(PRESET_AVATARS[0].id);
   const [customAvatarUrl, setCustomAvatarUrl] = useState('');
   const [uploadedAvatarPreview, setUploadedAvatarPreview] = useState('');
-  const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<any[]>([]);
   const [memberFilterQuery, setMemberFilterQuery] = useState('');
   const [memberRoleFilter, setMemberRoleFilter] = useState<'ALL' | 'VOLUNTEER' | 'EMPLOYEE' | 'ADMIN'>('ALL');
   const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
   const [formError, setFormError] = useState('');
 
   // Add Members to Existing Group Form State
-  const [newSelectedMemberIds, setNewSelectedMemberIds] = useState<number[]>([]);
+  const [newSelectedMemberIds, setNewSelectedMemberIds] = useState<any[]>([]);
   const [addMemberFilterQuery, setAddMemberFilterQuery] = useState('');
   const [addMemberRoleFilter, setAddMemberRoleFilter] = useState<'ALL' | 'VOLUNTEER' | 'EMPLOYEE' | 'ADMIN'>('ALL');
   const [isAddingMembers, setIsAddingMembers] = useState(false);
@@ -174,7 +190,13 @@ export const Chat = () => {
     }
   };
 
-  const canManageActiveGroup = isSuperAdmin || (activeGroup && activeGroup.createdBy === user?.id && !activeGroup.isDirect);
+  const canManageActiveGroup = isSuperAdmin || (
+    activeGroup && 
+    !activeGroup.isDirect && 
+    (activeGroup.createdBy === user?.id || 
+     activeGroup.mentorId === user?.id || 
+     (Array.isArray(activeGroup.adminIds) && activeGroup.adminIds.includes(user?.id)))
+  );
 
   // Auto scroll to bottom
   const scrollToBottom = () => {
@@ -308,8 +330,8 @@ export const Chat = () => {
   }, [targetMention]);
 
   // Fetch messages for active group
-  const fetchMessages = async (groupId: number, signal?: AbortSignal) => {
-    if (!token || !groupId || isNaN(groupId) || groupId <= 0) return;
+  const fetchMessages = async (groupId: any, signal?: AbortSignal) => {
+    if (!token || !groupId) return;
     try {
       const res = await apiFetch(`/api/chat/groups/${groupId}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -365,18 +387,9 @@ export const Chat = () => {
 
     try {
       if (selectedFile) {
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-        const uploadRes = await apiFetch('/api/upload', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData
-        });
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          attachmentUrl = uploadData.url;
-          attachmentName = uploadData.name;
-        }
+        const uploadResult = await uploadWorkspaceFile(selectedFile, selectedFile.name, 'chat_attachments', token);
+        attachmentUrl = uploadResult.url;
+        attachmentName = uploadResult.name;
       }
 
       const res = await apiFetch(`/api/chat/groups/${activeGroup.id}/messages`, {
@@ -385,7 +398,12 @@ export const Chat = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ content, attachmentUrl, attachmentName })
+        body: JSON.stringify({ 
+          content, 
+          attachmentUrl, 
+          attachmentName,
+          senderId: user?.id 
+        })
       });
 
       if (res.ok) {
@@ -430,13 +448,13 @@ export const Chat = () => {
   };
 
   // Member selection handlers for Create Modal
-  const toggleMemberSelection = (id: number) => {
+  const toggleMemberSelection = (id: any) => {
     setSelectedMemberIds(prev => 
       prev.includes(id) ? prev.filter(mId => mId !== id) : [...prev, id]
     );
   };
 
-  const handleSelectAll = (filteredIds: number[]) => {
+  const handleSelectAll = (filteredIds: any[]) => {
     const allSelected = filteredIds.every(id => selectedMemberIds.includes(id));
     if (allSelected) {
       setSelectedMemberIds(prev => prev.filter(id => !filteredIds.includes(id)));
@@ -446,13 +464,13 @@ export const Chat = () => {
   };
 
   // Member selection handlers for Add Members Modal
-  const toggleNewMemberSelection = (id: number) => {
+  const toggleNewMemberSelection = (id: any) => {
     setNewSelectedMemberIds(prev => 
       prev.includes(id) ? prev.filter(mId => mId !== id) : [...prev, id]
     );
   };
 
-  const handleSelectAllNew = (filteredIds: number[]) => {
+  const handleSelectAllNew = (filteredIds: any[]) => {
     const allSelected = filteredIds.every(id => newSelectedMemberIds.includes(id));
     if (allSelected) {
       setNewSelectedMemberIds(prev => prev.filter(id => !filteredIds.includes(id)));
@@ -596,7 +614,7 @@ export const Chat = () => {
   };
 
   // Remove a member from group
-  const handleRemoveMember = async (targetUserId: number, targetName: string) => {
+  const handleRemoveMember = async (targetUserId: any, targetName: string) => {
     if (!activeGroup) return;
     if (!confirm(`Are you sure you want to remove ${targetName} from "${activeGroup.name}"?`)) {
       return;
@@ -657,7 +675,7 @@ export const Chat = () => {
   };
 
   // Delete Group
-  const handleDeleteGroup = async (groupId: number) => {
+  const handleDeleteGroup = async (groupId: any) => {
     if (!confirm('Are you sure you want to delete this group? All messages and membership records will be permanently removed.')) {
       return;
     }
@@ -683,8 +701,7 @@ export const Chat = () => {
     if (u.id === user?.id) return false;
     const matchesSearch = 
       u.name.toLowerCase().includes(memberFilterQuery.toLowerCase()) ||
-      u.forenclueId.toLowerCase().includes(memberFilterQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(memberFilterQuery.toLowerCase());
+      u.forenclueId.toLowerCase().includes(memberFilterQuery.toLowerCase());
     
     if (!matchesSearch) return false;
     if (memberRoleFilter === 'ALL') return true;
@@ -701,8 +718,7 @@ export const Chat = () => {
     if (currentMemberIds.has(u.id)) return false;
     const matchesSearch = 
       u.name.toLowerCase().includes(addMemberFilterQuery.toLowerCase()) ||
-      u.forenclueId.toLowerCase().includes(addMemberFilterQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(addMemberFilterQuery.toLowerCase());
+      u.forenclueId.toLowerCase().includes(addMemberFilterQuery.toLowerCase());
     
     if (!matchesSearch) return false;
     if (addMemberRoleFilter === 'ALL') return true;
@@ -843,7 +859,7 @@ export const Chat = () => {
               const isDirect = group.isDirect || group.name.startsWith('DM:');
               const displayTitle = group.displayName || group.otherUser?.name || group.name.replace(/^DM:\s*/, '');
               const displaySub = isDirect
-                ? (group.otherUser?.department ? `${group.otherUser.department} Mentor` : (group.otherUser?.forenclueId || '1-on-1 Consultation'))
+                ? (group.isE2EE ? 'End-to-End Encrypted' : (group.otherUser?.department ? `${group.otherUser.department} Mentor` : (group.otherUser?.forenclueId || '1-on-1 Consultation')))
                 : group.description;
 
               return (
@@ -865,10 +881,11 @@ export const Chat = () => {
                           {displayTitle}
                         </h4>
                         {isDirect && (
-                          <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider ${
-                            isActive ? 'bg-blue-500 text-white' : 'bg-purple-50 text-purple-700 border border-purple-200'
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider flex items-center space-x-1 ${
+                            isActive ? 'bg-blue-500 text-white' : (group.isE2EE ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-purple-50 text-purple-700 border border-purple-200')
                           }`}>
-                            1-on-1
+                            {group.isE2EE && <Lock className="h-2.5 w-2.5 mr-0.5" />}
+                            {group.isE2EE ? 'E2EE' : '1-ON-1'}
                           </span>
                         )}
                       </div>
@@ -962,7 +979,7 @@ export const Chat = () => {
                     )}
                   </div>
                   <p className="text-[11px] text-slate-500 truncate max-w-xs sm:max-w-md font-mono">
-                    {activeGroup.otherUser?.forenclueId} {activeGroup.otherUser?.email ? `• ${activeGroup.otherUser.email}` : ''}
+                    {activeGroup.otherUser?.forenclueId}
                   </p>
                 </div>
               </div>
@@ -985,6 +1002,12 @@ export const Chat = () => {
                     <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium hidden sm:inline">
                       {activeGroup.memberCount} Members
                     </span>
+                    {activeGroup.mentorName && (
+                      <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200/70 px-2 py-0.5 rounded-full font-bold hidden lg:inline-flex items-center space-x-1">
+                        <Crown className="h-2.5 w-2.5 mr-1 text-amber-600 inline" />
+                        <span>Lead: {activeGroup.mentorName}</span>
+                      </span>
+                    )}
                   </div>
                   {activeGroup.description && (
                     <p className="text-[11px] text-slate-500 truncate max-w-xs sm:max-w-md">{activeGroup.description}</p>
@@ -1047,7 +1070,7 @@ export const Chat = () => {
                     {(activeGroup.otherUser?.name || activeGroup.displayName || activeGroup.name).charAt(0)}
                   </div>
                   <h4 className="text-sm font-bold text-slate-800">
-                    1-on-1 Consultation Channel
+                    {activeGroup.isE2EE ? 'End-to-End Encrypted Chat' : '1-on-1 Consultation Channel'}
                   </h4>
                   <p className="text-xs text-slate-700 font-semibold mt-1">
                     {activeGroup.otherUser?.name || activeGroup.displayName} ({activeGroup.otherUser?.forenclueId})
@@ -1057,9 +1080,9 @@ export const Chat = () => {
                     {activeGroup.otherUser?.role.replace('_', ' ')}
                   </p>
                   <div className="mt-4 p-3 bg-blue-50/90 border border-blue-100 rounded-xl text-left max-w-md text-xs text-slate-600 space-y-1">
-                    <p className="font-semibold text-blue-900">Official Mentor Direct Channel</p>
+                    <p className="font-semibold text-blue-900">{activeGroup.isE2EE ? 'Private Direct Chat' : 'Official Mentor Direct Channel'}</p>
                     <p className="text-[11px] text-blue-800/80 leading-relaxed">
-                      All messages in this channel are private between you and {activeGroup.otherUser?.name || 'this mentor'}. Use this space for personalized guidance, questions, and project mentorship.
+                      {activeGroup.isE2EE ? `Messages are end-to-end encrypted and visible only to you and ${activeGroup.otherUser?.name || 'this member'}.` : `All messages in this channel are private between you and ${activeGroup.otherUser?.name || 'this mentor'}. Use this space for personalized guidance, questions, and project mentorship.`}
                     </p>
                   </div>
                   <p className="text-[11px] text-blue-600 mt-4 font-medium">Type your message below to start your conversation!</p>
@@ -1152,16 +1175,16 @@ export const Chat = () => {
                         {msg.attachmentUrl && !msg.isEncrypted && (
                           <div className="mt-2 pt-2 border-t border-white/20">
                             {msg.attachmentUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                              <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block">
+                              <a href={formatAttachmentUrl(msg.attachmentUrl)} target="_blank" rel="noopener noreferrer" className="block">
                                 <img 
-                                  src={msg.attachmentUrl} 
+                                  src={formatAttachmentUrl(msg.attachmentUrl)} 
                                   alt={msg.attachmentName || 'Attachment'} 
                                   className="max-h-48 rounded-xl object-cover border border-white/20 shadow-xs hover:opacity-95 transition-opacity"
                                 />
                               </a>
                             ) : (
                               <a 
-                                href={msg.attachmentUrl} 
+                                href={formatAttachmentUrl(msg.attachmentUrl)} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className={`flex items-center space-x-2 p-2 rounded-xl border transition-colors ${
@@ -1838,16 +1861,6 @@ export const Chat = () => {
                   <div className="space-y-3 bg-white p-3 rounded-xl border border-slate-200 text-xs">
                     <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
                       <span className="text-slate-500 flex items-center space-x-1.5">
-                        <Mail className="h-3.5 w-3.5 text-slate-400" />
-                        <span>Official Email</span>
-                      </span>
-                      <span className="font-medium text-slate-800 font-mono">
-                        {activeGroup.otherUser?.email || 'N/A'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
-                      <span className="text-slate-500 flex items-center space-x-1.5">
                         <Briefcase className="h-3.5 w-3.5 text-slate-400" />
                         <span>Department</span>
                       </span>
@@ -1929,6 +1942,8 @@ export const Chat = () => {
                       {activeGroup.members && activeGroup.members.length > 0 ? (
                         activeGroup.members.map((member) => {
                           const isCreator = member.id === activeGroup.createdBy;
+                          const isMentorAdmin = member.id === activeGroup.mentorId || 
+                            (Array.isArray(activeGroup.adminIds) && activeGroup.adminIds.includes(member.id));
                           return (
                             <div key={member.id} className="pt-2 flex items-center justify-between">
                               <div className="flex items-center space-x-2.5">
@@ -1937,13 +1952,18 @@ export const Chat = () => {
                                 </div>
                                 <div>
                                   <p className="text-xs font-semibold text-slate-800">{member.name}</p>
-                                  <div className="flex items-center space-x-1.5">
+                                  <div className="flex items-center space-x-1.5 flex-wrap gap-y-0.5">
                                     <span className="text-[10px] font-mono text-slate-400">{member.forenclueId}</span>
-                                    {isCreator && (
+                                    {isMentorAdmin ? (
+                                      <span className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200/80 font-bold px-1.5 py-0.2 rounded flex items-center space-x-0.5">
+                                        <Crown className="h-2.5 w-2.5 mr-0.5 text-amber-600 inline" />
+                                        <span>Mentor & Admin</span>
+                                      </span>
+                                    ) : isCreator ? (
                                       <span className="text-[9px] bg-blue-50 text-blue-700 font-bold px-1 rounded">
                                         Creator
                                       </span>
-                                    )}
+                                    ) : null}
                                   </div>
                                 </div>
                               </div>
@@ -1956,7 +1976,7 @@ export const Chat = () => {
                                 }`}>
                                   {member.role}
                                 </span>
-                                {canManageActiveGroup && !isCreator && member.id !== user?.id && (
+                                {canManageActiveGroup && !isMentorAdmin && !isCreator && member.id !== user?.id && (
                                   <button
                                     onClick={() => handleRemoveMember(member.id, member.name)}
                                     className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"

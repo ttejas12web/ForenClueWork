@@ -48,44 +48,38 @@ interface TaskItem {
 interface DepartmentMentor {
   name: string;
   forenclueId: string;
-  email: string;
   code: string;
   color: string;
 }
 
 const DEPARTMENT_MENTORS: Record<string, DepartmentMentor> = {
-  'Creative & Design': {
+  'Creative & Graphics': {
     name: 'Tejas Tapse',
     forenclueId: 'FC-EMP-2026-001',
-    email: 'tejas.tapse@forenclue.com',
-    code: 'CD',
+    code: 'CG',
     color: 'bg-rose-600'
   },
   'Case Study': {
     name: 'Ayush Gaikwad',
     forenclueId: 'FC-EMP-2026-003',
-    email: 'ayush.gaikwad@forenclue.com',
     code: 'CS',
     color: 'bg-emerald-600'
   },
   'Research': {
     name: 'Purva Bhawsar',
     forenclueId: 'FC-EMP-2026-004',
-    email: 'purva.bhawsar@forenclue.com',
     code: 'RS',
     color: 'bg-blue-600'
   },
-  'Events & Webinars': {
+  'Events & Management': {
     name: 'Mrunmayee Bodhe',
     forenclueId: 'FC-EMP-2026-002',
-    email: 'mrunmayee.bodhe@forenclue.com',
-    code: 'EW',
+    code: 'EM',
     color: 'bg-purple-600'
   },
   'Cyber & Digital Forensics': {
-    name: 'Alex Sterling',
-    forenclueId: 'FC-MNT-2026-005',
-    email: 'alex.sterling@forenclue.com',
+    name: 'Tejas Tapse',
+    forenclueId: 'FC-EMP-2026-001',
     code: 'CF',
     color: 'bg-indigo-600'
   }
@@ -155,8 +149,8 @@ export const Profile = () => {
 
   const isSuperAdmin = user.role === 'SUPER_ADMIN';
   const isMentor = user.role === 'MENTOR';
-  const userDept = user.department || 'Creative & Design';
-  const mentorInfo = DEPARTMENT_MENTORS[userDept] || DEPARTMENT_MENTORS['Creative & Design'];
+  const userDept = user.department || 'Creative & Graphics';
+  const mentorInfo = DEPARTMENT_MENTORS[userDept] || DEPARTMENT_MENTORS['Creative & Graphics'];
 
   const todoTasks = myTasks.filter(t => t.status === 'TODO');
   const inProgressTasks = myTasks.filter(t => t.status === 'IN_PROGRESS');
@@ -323,7 +317,7 @@ export const Profile = () => {
 
                 <span className="flex items-center text-slate-600">
                   <Briefcase className="h-3.5 w-3.5 mr-1 text-slate-400" />
-                  {user.department || 'Creative & Design'}
+                  {user.department || 'Creative & Graphics'}
                 </span>
 
                 <span className="text-slate-300 hidden sm:inline">•</span>
@@ -567,14 +561,6 @@ export const Profile = () => {
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-slate-400 flex items-center mb-1">
-                    <Mail className="h-3.5 w-3.5 mr-1.5 text-slate-400" />
-                    Official Email
-                  </span>
-                  <span className="font-semibold text-slate-900 break-all">{user.email}</span>
-                </div>
-
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-slate-400 flex items-center mb-1">
                     <Hash className="h-3.5 w-3.5 mr-1.5 text-slate-400" />
@@ -960,18 +946,6 @@ export const Profile = () => {
                 className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-500 cursor-not-allowed"
               />
               <p className="text-[10px] text-slate-400 mt-1">Official ID numbers are permanently generated and can only be altered by Super Admins.</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Official Email Address (Read-only)
-              </label>
-              <input
-                type="email"
-                value={user.email}
-                disabled
-                className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-500 cursor-not-allowed"
-              />
             </div>
 
             <div>

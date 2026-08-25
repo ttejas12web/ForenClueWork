@@ -45,17 +45,17 @@ export const Teams = () => {
   const navigate = useNavigate();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDept, setSelectedDept] = useState<string>('Creative & Design');
+  const [selectedDept, setSelectedDept] = useState<string>('Creative & Graphics');
   const [searchMember, setSearchMember] = useState('');
 
   const departments: DepartmentInfo[] = [
     { 
-      name: 'Creative & Design', 
+      name: 'Creative & Graphics', 
       desc: 'Visual evidence diagrams, case presentation layouts, UI design, infographics, and public communication assets.', 
       code: 'CD', 
-      mentorName: 'Tejas Tapse',
-      mentorId: 'FC-EMP-2026-001',
-      mentorEmail: 'tejas.tapse@forenclue.com',
+      mentorName: 'Ayush Gaikwad',
+      mentorId: 'FC-EMP-2026-003',
+      mentorEmail: 'ayush.gaikwad@forenclue.in',
       color: 'bg-rose-600',
       badgeColor: 'bg-rose-50 text-rose-700 border-rose-200'
     },
@@ -65,7 +65,7 @@ export const Teams = () => {
       code: 'CS', 
       mentorName: 'Ayush Gaikwad',
       mentorId: 'FC-EMP-2026-003',
-      mentorEmail: 'ayush.gaikwad@forenclue.com',
+      mentorEmail: 'ayush.gaikwad@forenclue.in',
       color: 'bg-emerald-600',
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200'
     },
@@ -75,17 +75,17 @@ export const Teams = () => {
       code: 'RS', 
       mentorName: 'Purva Bhawsar',
       mentorId: 'FC-EMP-2026-004',
-      mentorEmail: 'purva.bhawsar@forenclue.com',
+      mentorEmail: 'purva.bhawsar@forenclue.in',
       color: 'bg-blue-600',
       badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
     },
     { 
-      name: 'Events & Webinars', 
+      name: 'Events & Management', 
       desc: 'Workshops, expert keynote webinars, technical training bootcamps, and educational community sessions.', 
       code: 'EW', 
       mentorName: 'Mrunmayee Bodhe',
       mentorId: 'FC-EMP-2026-002',
-      mentorEmail: 'mrunmayee.bodhe@forenclue.com',
+      mentorEmail: 'mrunmayee.bodhe@forenclue.in',
       color: 'bg-purple-600',
       badgeColor: 'bg-purple-50 text-purple-700 border-purple-200'
     },
@@ -95,7 +95,7 @@ export const Teams = () => {
       code: 'CF', 
       mentorName: 'Tejas Tapse',
       mentorId: 'FC-EMP-2026-001',
-      mentorEmail: 'tejas.tapse@forenclue.com',
+      mentorEmail: 'ttapse12@gmail.com',
       color: 'bg-indigo-600',
       badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200'
     },
@@ -127,8 +127,7 @@ export const Teams = () => {
     const matchesDept = m.department === selectedDept;
     const matchesSearch = searchMember 
       ? m.name.toLowerCase().includes(searchMember.toLowerCase()) || 
-        m.forenclueId.toLowerCase().includes(searchMember.toLowerCase()) ||
-        m.email.toLowerCase().includes(searchMember.toLowerCase())
+        m.forenclueId.toLowerCase().includes(searchMember.toLowerCase())
       : true;
     return matchesDept && matchesSearch;
   });
@@ -367,10 +366,6 @@ export const Teams = () => {
                       </div>
                       <p className="text-[11px] font-mono font-bold text-blue-600 mt-0.5">
                         {member.forenclueId}
-                      </p>
-                      <p className="text-[11px] text-slate-500 truncate flex items-center mt-1">
-                        <Mail className="h-3 w-3 mr-1 text-slate-400 flex-shrink-0" />
-                        <span className="truncate">{member.email}</span>
                       </p>
                     </div>
                   </div>

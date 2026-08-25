@@ -1,5 +1,5 @@
 {
-  "name": "ForenClue Workspace",
+  "name": "ForenClue WorkSpace",
   "description": "Internal workspace and team collaboration platform for ForenClue with Cloud SQL relational backend.",
   "requestFramePermissions": [],
   "majorCapabilities": [

@@ -13,11 +13,33 @@ interface AuthState {
   logout: () => void;
 }
 
+function sanitizeAuthUser(u: User | null): User | null {
+  if (!u) return null;
+  if (
+    u.forenclueId === 'FC-EMP-2026-001' ||
+    u.email?.toLowerCase() === 'ttapse12@gmail.com' ||
+    u.id === 'user_admin_001'
+  ) {
+    return {
+      ...u,
+      name: 'Tejas Tapse',
+      forenclueId: 'FC-EMP-2026-001',
+      email: 'ttapse12@gmail.com',
+      role: 'SUPER_ADMIN',
+      department: u.department || 'Cyber & Digital Forensics',
+      designation: u.designation || 'Founder & Forensic Lead'
+    };
+  }
+  return u;
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: (() => {
     try {
       const storedUser = localStorage.getItem('auth_user');
-      return storedUser ? JSON.parse(storedUser) : null;
+      if (!storedUser) return null;
+      const parsed = JSON.parse(storedUser);
+      return sanitizeAuthUser(parsed);
     } catch {
       return null;
     }
@@ -25,7 +47,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: localStorage.getItem('auth_token'),
   loading: true,
   
-  setUser: (user) => {
+  setUser: (rawUser) => {
+    const user = sanitizeAuthUser(rawUser);
     if (user) {
       localStorage.setItem('auth_user', JSON.stringify(user));
       localStorage.setItem('auth_user_id', user.id);
@@ -36,7 +59,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user });
   },
 
-  login: (token, user) => {
+  login: (token, rawUser) => {
+    const user = sanitizeAuthUser(rawUser) || rawUser;
     localStorage.setItem('auth_token', token);
     localStorage.setItem('auth_user', JSON.stringify(user));
     localStorage.setItem('auth_user_id', user.id);
@@ -60,16 +84,21 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     try {
-      const cachedUser = JSON.parse(storedUserStr);
+      const cachedUser = sanitizeAuthUser(JSON.parse(storedUserStr));
+      if (cachedUser) {
+        localStorage.setItem('auth_user', JSON.stringify(cachedUser));
+      }
       set({ user: cachedUser, token, loading: false });
 
       // Refresh latest user record from Firestore in background
-      if (cachedUser.id) {
+      if (cachedUser?.id) {
         const userDoc = await getDoc(doc(db, 'users', cachedUser.id));
         if (userDoc.exists()) {
-          const freshData = { ...userDoc.data(), id: userDoc.id } as User;
-          localStorage.setItem('auth_user', JSON.stringify(freshData));
-          set({ user: freshData });
+          const freshData = sanitizeAuthUser({ ...userDoc.data(), id: userDoc.id } as User);
+          if (freshData) {
+            localStorage.setItem('auth_user', JSON.stringify(freshData));
+            set({ user: freshData });
+          }
         }
       }
     } catch (error) {

@@ -37,17 +37,17 @@ export const AdminConsole = () => {
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('Forenclue@2026');
   const [newRole, setNewRole] = useState<Role>('EMPLOYEE');
-  const [newDepartment, setNewDepartment] = useState('Creative & Design');
+  const [newDepartment, setNewDepartment] = useState('Creative & Graphics');
   const [newForenclueId, setNewForenclueId] = useState('');
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [formLoading, setFormLoading] = useState(false);
 
   const departmentsList = [
-    'Creative & Design',
+    'Creative & Graphics',
     'Case Study',
     'Research',
-    'Events & Webinars',
+    'Events & Management',
     'Cyber & Digital Forensics'
   ];
 
@@ -92,7 +92,7 @@ export const AdminConsole = () => {
 
   const handleOpenNewUser = () => {
     setNewRole('EMPLOYEE');
-    setNewDepartment('Creative & Design');
+    setNewDepartment('Creative & Graphics');
     setNewForenclueId(generateForenclueId('EMPLOYEE'));
     setNewPassword('Forenclue@2026');
     setFormError('');
@@ -183,7 +183,6 @@ export const AdminConsole = () => {
   const filteredUsers = users.filter((u) => {
     const matchesSearch = 
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (u.department && u.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
       u.forenclueId.toLowerCase().includes(searchQuery.toLowerCase());
     
@@ -456,7 +455,6 @@ export const AdminConsole = () => {
                           </div>
                           <div>
                             <p className="font-bold text-slate-900">{u.name}</p>
-                            <p className="text-slate-400 text-[11px]">{u.email}</p>
                           </div>
                         </div>
                       </td>
@@ -527,7 +525,6 @@ export const AdminConsole = () => {
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-slate-900">{u.name}</h4>
-                        <p className="text-[11px] text-slate-400">{u.email}</p>
                       </div>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -588,10 +585,10 @@ export const AdminConsole = () => {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
             {[
-              { name: 'Creative & Design', code: 'CD', color: 'bg-rose-600' },
+              { name: 'Creative & Graphics', code: 'CD', color: 'bg-rose-600' },
               { name: 'Case Study', code: 'CS', color: 'bg-emerald-600' },
               { name: 'Research', code: 'RS', color: 'bg-blue-600' },
-              { name: 'Events & Webinars', code: 'EW', color: 'bg-purple-600' },
+              { name: 'Events & Management', code: 'EW', color: 'bg-purple-600' },
               { name: 'Cyber & Digital Forensics', code: 'CF', color: 'bg-indigo-600' },
             ].map((d) => {
               const count = users.filter(u => u.department === d.name).length;

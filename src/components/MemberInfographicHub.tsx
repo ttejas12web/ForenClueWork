@@ -20,9 +20,14 @@ import {
   Layers, 
   Filter,
   Check,
-  Timer
+  Timer,
+  MessageSquare,
+  Megaphone,
+  RefreshCw,
+  CalendarDays
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { TaskAllowedCalendar } from './TaskAllowedCalendar';
 
 interface DepartmentStat {
   department: string;
@@ -102,8 +107,9 @@ interface MemberInfographicHubProps {
 export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user, token }) => {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [taskFilter, setTaskFilter] = useState<'ALL' | 'URGENT' | 'ACTIVE' | 'COMPLETED'>('ALL');
-  const [activeTab, setActiveTab] = useState<'MY_TASKS' | 'DEPARTMENT_HEATMAP' | 'LEADERBOARD'>('MY_TASKS');
+  const [activeTab, setActiveTab] = useState<'MY_TASKS' | 'TASK_CALENDAR' | 'DEPARTMENT_HEATMAP' | 'LEADERBOARD'>('MY_TASKS');
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -111,17 +117,19 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
   }, [token]);
 
   const fetchInsights = async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
-      if (!token) return;
+      if (!token) throw new Error('Your workspace session is unavailable. Please sign in again.');
       const res = await apiFetch('/api/analytics/workspace-insights', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-      }
+      if (!res.ok) throw new Error('Workspace insights could not be loaded.');
+      const json = await res.json();
+      setData(json);
     } catch (err) {
       console.error('Failed to load workspace analytics:', err);
+      setLoadError(err instanceof Error ? err.message : 'Workspace insights could not be loaded.');
     } finally {
       setLoading(false);
     }
@@ -148,11 +156,30 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
     }
   };
 
-  if (loading || !data) {
+  if (loading) {
     return (
-      <div className="py-12 flex flex-col items-center justify-center space-y-3">
+      <div className="py-16 flex flex-col items-center justify-center space-y-3" role="status" aria-live="polite">
         <div className="h-9 w-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs text-slate-500 font-medium">Synthesizing forensic infographic metrics...</p>
+        <p className="text-sm text-slate-600 font-medium">Preparing your member workspace...</p>
+      </div>
+    );
+  }
+
+  if (loadError || !data) {
+    return (
+      <div className="max-w-xl mx-auto my-10 rounded-2xl border border-rose-200 bg-white p-6 text-center shadow-sm">
+        <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+          <AlertTriangle className="h-5 w-5" />
+        </div>
+        <h2 className="text-base font-bold text-slate-900">Workspace briefing unavailable</h2>
+        <p className="mt-1 text-sm text-slate-600">{loadError || 'We could not load your workspace data.'}</p>
+        <button
+          onClick={fetchInsights}
+          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-800"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Try again
+        </button>
       </div>
     );
   }
@@ -169,6 +196,25 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
 
   const maxDeptTasks = Math.max(...departmentStats.map(d => d.totalTasks), 1);
   const highestVolumeDept = departmentStats[0];
+  const activeTasks = userTasks.filter(task => task.status !== 'COMPLETED');
+  const overdueTasks = activeTasks.filter(task => task.isOverdue || task.deadlineStatus === 'OVERDUE');
+  const dueSoonTasks = activeTasks.filter(task => task.daysRemaining !== null && task.daysRemaining >= 0 && task.daysRemaining <= 7);
+  const priorityRank: Record<UserTask['priority'], number> = { LOW: 1, MEDIUM: 2, HIGH: 3, URGENT: 4 };
+  const nextPriorityTask = [...activeTasks].sort((a, b) => {
+    const overdueDifference = Number(b.isOverdue) - Number(a.isOverdue);
+    if (overdueDifference !== 0) return overdueDifference;
+    const deadlineDifference = (a.daysRemaining ?? Number.MAX_SAFE_INTEGER) - (b.daysRemaining ?? Number.MAX_SAFE_INTEGER);
+    if (deadlineDifference !== 0) return deadlineDifference;
+    return priorityRank[b.priority] - priorityRank[a.priority];
+  })[0];
+  const completionRate = userMetrics.totalAllotted > 0
+    ? Math.round((userMetrics.completed / userMetrics.totalAllotted) * 100)
+    : 0;
+  const todayLabel = new Intl.DateTimeFormat('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  }).format(new Date());
 
   return (
     <div className="space-y-6">
@@ -181,13 +227,13 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
           <div className="space-y-2 max-w-xl">
             <div className="inline-flex items-center space-x-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold border border-white/10 text-blue-300">
               <Sparkles className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
-              <span>Interactive Forensic Precision Hub</span>
+              <span>Official Member Operations Center</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
               Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-300 via-cyan-200 to-emerald-300">{user.name}</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Track your allotted forensic tasks, deadline countdowns, on-time velocity, and cross-department performance benchmarks in real time.
+              Your official starting point for priorities, deadlines, team coordination, and accountable forensic operations.
             </p>
           </div>
 
@@ -225,42 +271,163 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
         </div>
       </div>
 
+      {/* Daily member briefing and official shortcuts */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.55fr)] gap-4">
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700">
+                <Calendar className="h-4 w-4" />
+                Today at ForenClue
+              </div>
+              <h2 className="mt-1 text-xl font-black text-slate-900">Your operational briefing</h2>
+              <p className="mt-1 text-xs text-slate-500">{todayLabel} • Focus on the work that needs you most.</p>
+            </div>
+            <Link to="/tasks" className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-800">
+              Open task board
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-rose-700">Overdue</span>
+                <AlertTriangle className="h-4 w-4 text-rose-500" />
+              </div>
+              <p className="mt-1 text-2xl font-black text-slate-900">{overdueTasks.length}</p>
+              <p className="text-[11px] text-slate-600">Require immediate attention</p>
+            </div>
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-700">Due in 7 days</span>
+                <Clock className="h-4 w-4 text-amber-500" />
+              </div>
+              <p className="mt-1 text-2xl font-black text-slate-900">{dueSoonTasks.length}</p>
+              <p className="text-[11px] text-slate-600">Plan these into your week</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-700">Completion</span>
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              </div>
+              <p className="mt-1 text-2xl font-black text-slate-900">{completionRate}%</p>
+              <p className="text-[11px] text-slate-600">{userMetrics.completed} of {userMetrics.totalAllotted} allotted</p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+                <Zap className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-black uppercase tracking-wider text-blue-700">Recommended next action</p>
+                {nextPriorityTask ? (
+                  <>
+                    <p className="mt-1 truncate text-sm font-bold text-slate-900">{nextPriorityTask.title}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                      <span className="rounded-md bg-white px-2 py-0.5 font-bold text-slate-700">{nextPriorityTask.priority}</span>
+                      <span>{nextPriorityTask.dueDate ? 'Due ' + new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(new Date(nextPriorityTask.dueDate)) : 'No due date'}</span>
+                      {nextPriorityTask.department && <span>• {nextPriorityTask.department}</span>}
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm font-bold text-emerald-700">You are clear—no active tasks are waiting.</p>
+                )}
+              </div>
+              {nextPriorityTask && (
+                <Link to="/tasks" aria-label="Open recommended task" className="rounded-lg p-2 text-blue-700 transition-colors hover:bg-blue-100">
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <aside className="rounded-3xl border border-slate-200 bg-slate-950 p-5 text-white shadow-sm">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-blue-400" />
+            <h2 className="text-sm font-black">Official quick actions</h2>
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-400">Move directly to the tools members use every day.</p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Link to="/tasks" className="rounded-xl border border-slate-800 bg-slate-900 p-3 transition-colors hover:border-blue-500/60 hover:bg-slate-800">
+              <CheckSquare className="h-4 w-4 text-emerald-400" />
+              <p className="mt-2 text-xs font-bold">My tasks</p>
+            </Link>
+            <Link to="/chat" className="rounded-xl border border-slate-800 bg-slate-900 p-3 transition-colors hover:border-blue-500/60 hover:bg-slate-800">
+              <MessageSquare className="h-4 w-4 text-blue-400" />
+              <p className="mt-2 text-xs font-bold">Team chat</p>
+            </Link>
+            <Link to="/calendar" className="rounded-xl border border-slate-800 bg-slate-900 p-3 transition-colors hover:border-blue-500/60 hover:bg-slate-800">
+              <Calendar className="h-4 w-4 text-amber-400" />
+              <p className="mt-2 text-xs font-bold">Calendar</p>
+            </Link>
+            <Link to="/announcements" className="rounded-xl border border-slate-800 bg-slate-900 p-3 transition-colors hover:border-blue-500/60 hover:bg-slate-800">
+              <Megaphone className="h-4 w-4 text-violet-400" />
+              <p className="mt-2 text-xs font-bold">Notices</p>
+            </Link>
+          </div>
+          <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">Member standard</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-400">Protect case information, document decisions, and use official channels for every assignment.</p>
+          </div>
+        </aside>
+      </div>
+
       {/* Navigation Infographic Tabs */}
-      <div className="flex flex-wrap items-center gap-2 p-1 bg-slate-100/80 rounded-2xl border border-slate-200/80 w-fit">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-1.5 sm:gap-2 p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200/80 w-full sm:w-fit">
         <button
           onClick={() => setActiveTab('MY_TASKS')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center justify-center sm:justify-start space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'MY_TASKS'
               ? 'bg-white text-blue-700 shadow-sm shadow-slate-200'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <CheckSquare className="h-3.5 w-3.5" />
-          <span>My Tasks & Deadlines ({userMetrics.tasks.length})</span>
+          <CheckSquare className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="truncate">My Tasks & Deadlines ({userMetrics.tasks.length})</span>
+        </button>
+
+        <button
+          id="btn-tab-task-allowed-calendar"
+          onClick={() => setActiveTab('TASK_CALENDAR')}
+          className={`flex items-center justify-center sm:justify-start space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'TASK_CALENDAR'
+              ? 'bg-white text-blue-700 shadow-sm shadow-slate-200'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <CalendarDays className="h-3.5 w-3.5 flex-shrink-0 text-blue-600" />
+          <span className="truncate">Task Allowed Calendar</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 text-blue-800 font-bold ml-1">
+            Standard
+          </span>
         </button>
 
         <button
           onClick={() => setActiveTab('DEPARTMENT_HEATMAP')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center justify-center sm:justify-start space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'DEPARTMENT_HEATMAP'
               ? 'bg-white text-blue-700 shadow-sm shadow-slate-200'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <BarChart3 className="h-3.5 w-3.5" />
-          <span>Department Workload & Top Performers</span>
+          <BarChart3 className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="truncate">Department Workload</span>
         </button>
 
         <button
           onClick={() => setActiveTab('LEADERBOARD')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center justify-center sm:justify-start space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'LEADERBOARD'
               ? 'bg-white text-blue-700 shadow-sm shadow-slate-200'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <Trophy className="h-3.5 w-3.5" />
-          <span>Organization Leaderboard</span>
+          <Trophy className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="truncate">Organization Leaderboard</span>
         </button>
       </div>
 
@@ -441,7 +608,16 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
         </div>
       )}
 
-      {/* SECTION 2: DEPARTMENT WORKLOAD HEATMAP & TOP PERFORMER RECOGNITION */}
+      {/* SECTION 2: TASK ALLOWED CALENDAR (STANDARD WORKSPACE SCHEDULE) */}
+      {activeTab === 'TASK_CALENDAR' && (
+        <TaskAllowedCalendar
+          tasks={userTasks as any}
+          user={user}
+          onUpdateTaskStatus={handleUpdateStatus}
+        />
+      )}
+
+      {/* SECTION 3: DEPARTMENT WORKLOAD HEATMAP & TOP PERFORMER RECOGNITION */}
       {activeTab === 'DEPARTMENT_HEATMAP' && (
         <div className="space-y-6">
           {/* Department Volume Infographic Banner */}

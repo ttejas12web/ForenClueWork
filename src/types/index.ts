@@ -7,6 +7,8 @@ export interface User {
   email: string;
   role: Role;
   department?: string;
+  designation?: string;
+  phone?: string;
   teamIds?: string[];
   mentorId?: string;
   joiningDate: string;
@@ -67,3 +69,16 @@ export interface Resource {
   uploadedBy: string;
   createdAt: number;
 }
+
+export interface WorkspaceEvent {
+  id: string | number;
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  attendees: string;
+  category: 'Meeting' | 'Briefing' | 'Webinar' | 'Orientation' | 'Case Review' | 'Workshop' | string;
+  description?: string;
+  createdAt?: number;
+}
+
