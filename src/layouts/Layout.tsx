@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Outlet, useLocation, Link } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { PwaInstallPrompt } from "../components/PwaInstallPrompt";
 import { useAuthStore } from "../store/authStore";
 import { Home, MessageSquare, CheckSquare, Users, Settings, User } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -73,6 +74,7 @@ export const Layout = () => {
           })}
         </nav>
       </div>
+      <PwaInstallPrompt />
     </div>
   );
 };
