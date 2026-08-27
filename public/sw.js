@@ -1,5 +1,5 @@
 // ForenClue PWA Service Worker for Background Push Notifications
-const SW_VERSION = '1.0.0';
+const SW_VERSION = '1.1.0';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -24,27 +24,43 @@ self.addEventListener('push', (event) => {
   }
 
   const title = payload.title || 'ForenClue Notification';
+  const targetUrl = payload.url || (payload.data && payload.data.url) || '/chat';
+  
   const notificationOptions = {
     body: payload.body || 'You have a new update in your ForenClue workspace.',
     icon: payload.icon || '/app-icon-192.png',
     badge: payload.badge || '/favicon.png',
-    image: payload.image || undefined,
     tag: payload.tag || `forenclue-alert-${Date.now()}`,
     data: {
-      url: payload.url || (payload.data && payload.data.url) || '/',
+      url: targetUrl,
       timestamp: Date.now(),
-      ...payload.data
+      ...(payload.data || {})
     },
     vibrate: [200, 100, 200, 100, 200],
-    requireInteraction: payload.requireInteraction !== undefined ? payload.requireInteraction : false,
-    actions: payload.actions || [
-      { action: 'open', title: 'Open ForenClue' },
-      { action: 'dismiss', title: 'Dismiss' }
-    ]
+    requireInteraction: payload.requireInteraction !== undefined ? payload.requireInteraction : false
   };
 
+  // Broadcast to open clients if app is active
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    clients.forEach((client) => {
+      client.postMessage({
+        type: 'PUSH_RECEIVED',
+        payload: {
+          title,
+          ...notificationOptions
+        }
+      });
+    });
+  });
+
   event.waitUntil(
-    self.registration.showNotification(title, notificationOptions)
+    self.registration.showNotification(title, notificationOptions).catch((err) => {
+      console.warn('Advanced notification options rejected, displaying basic notification:', err);
+      return self.registration.showNotification(title, {
+        body: notificationOptions.body,
+        icon: '/app-icon-192.png'
+      });
+    })
   );
 });
 

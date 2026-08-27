@@ -5,6 +5,7 @@ import { TopBar } from "./TopBar";
 import { PwaInstallPrompt } from "../components/PwaInstallPrompt";
 import { useAuthStore } from "../store/authStore";
 import { subscribeToChatGroups, subscribeToAnnouncements } from "../lib/firestoreService";
+import { showDeviceNotification } from "../lib/pushNotifications";
 import { Home, MessageSquare, CheckSquare, Users, Settings, User } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -30,11 +31,17 @@ export const Layout = () => {
         if (lastMsg && lastMsg.createdAt) {
           const prevTime = seenGroupsRef.current[group.id];
           if (!isInitChat && prevTime && prevTime !== lastMsg.createdAt) {
-            if (lastMsg.senderId !== String(user.id) && Notification.permission === 'granted') {
-              new Notification(`New message in ${group.name || 'Chat'}`, {
-                body: `${lastMsg.senderName}: ${lastMsg.content}`,
-                icon: '/app-icon.png'
-              });
+            if (lastMsg.senderId !== String(user.id)) {
+              showDeviceNotification(
+                group.isDirect ? lastMsg.senderName : `${group.name || 'Chat'}: ${lastMsg.senderName}`,
+                {
+                  body: lastMsg.content || 'Sent a file/attachment',
+                  icon: '/app-icon-192.png',
+                  badge: '/favicon.png',
+                  url: `/chat?groupId=${group.id}`,
+                  tag: `chat-${group.id}`
+                }
+              );
             }
           }
           seenGroupsRef.current[group.id] = lastMsg.createdAt;
@@ -46,10 +53,13 @@ export const Layout = () => {
     const unsubAnn = subscribeToAnnouncements((anns) => {
       anns.forEach(ann => {
         if (!isInitAnn && !seenAnnsRef.current[ann.id]) {
-          if (ann.authorId !== String(user.id) && Notification.permission === 'granted') {
-            new Notification(`Announcement: ${ann.title}`, {
+          if (ann.authorId !== String(user.id)) {
+            showDeviceNotification(`Announcement: ${ann.title}`, {
               body: ann.content,
-              icon: '/app-icon.png'
+              icon: '/app-icon-192.png',
+              badge: '/favicon.png',
+              url: '/announcements',
+              tag: `ann-${ann.id}`
             });
           }
         }

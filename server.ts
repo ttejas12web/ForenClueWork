@@ -47,6 +47,9 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+import { initializeApp, getApps } from 'firebase/app';
+import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc } from 'firebase/firestore';
+
 // ----------------------------------------------------
 // WEB PUSH & BACKGROUND NOTIFICATIONS
 // ----------------------------------------------------
@@ -58,6 +61,19 @@ try {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 } catch (error) {
   console.error('VAPID setup warning:', error);
+}
+
+// Server Firebase instance for background Firestore subscriptions
+let serverFirestoreDb: any = null;
+try {
+  const firebaseConfigPath = resolve(process.cwd(), 'firebase-applet-config.json');
+  if (existsSync(firebaseConfigPath)) {
+    const rawConfig = JSON.parse(readFileSync(firebaseConfigPath, 'utf-8'));
+    const sApp = !getApps().length ? initializeApp(rawConfig) : getApps()[0];
+    serverFirestoreDb = initializeFirestore(sApp, {}, rawConfig.firestoreDatabaseId || undefined);
+  }
+} catch (fbInitErr) {
+  console.warn('Server Firestore initialization notice:', fbInitErr);
 }
 
 interface PushSubscriptionRecord {
@@ -77,13 +93,51 @@ interface PushSubscriptionRecord {
 
 const pushSubscriptions = new Map<string, PushSubscriptionRecord>();
 
+async function getAllPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
+  const subsMap = new Map<string, PushSubscriptionRecord>();
+
+  // 1. In-memory cache
+  for (const [endpoint, record] of pushSubscriptions.entries()) {
+    subsMap.set(endpoint, record);
+  }
+
+  // 2. Query Firestore push_subscriptions collection
+  if (serverFirestoreDb) {
+    try {
+      const snap = await getDocs(collection(serverFirestoreDb, 'push_subscriptions'));
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as any;
+        if (data && data.endpoint && data.keys && data.keys.p256dh && data.keys.auth) {
+          const rec: PushSubscriptionRecord = {
+            endpoint: data.endpoint,
+            keys: data.keys,
+            userId: data.userId ? String(data.userId) : undefined,
+            forenclueId: data.forenclueId ? String(data.forenclueId) : undefined,
+            role: data.role,
+            department: data.department,
+            userAgent: data.userAgent,
+            createdAt: data.createdAt || data.updatedAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || new Date().toISOString()
+          };
+          subsMap.set(data.endpoint, rec);
+          pushSubscriptions.set(data.endpoint, rec);
+        }
+      });
+    } catch (err) {
+      console.warn('Could not read push_subscriptions from Firestore:', err);
+    }
+  }
+
+  return Array.from(subsMap.values());
+}
+
 // Public key endpoint for client PWA subscription
 app.get('/api/push/vapid-public-key', (_req, res) => {
   res.json({ publicKey: vapidPublicKey });
 });
 
 // Register or update a device/browser push subscription
-app.post('/api/push/subscribe', (req, res) => {
+app.post('/api/push/subscribe', async (req, res) => {
   try {
     const { subscription, userId, forenclueId, role, department, userAgent } = req.body;
     if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
@@ -95,17 +149,37 @@ app.post('/api/push/subscribe', (req, res) => {
     const now = new Date().toISOString();
     const existing = pushSubscriptions.get(endpoint);
 
-    pushSubscriptions.set(endpoint, {
+    const record: PushSubscriptionRecord = {
       endpoint,
       keys: subscription.keys,
-      userId: userId ? String(userId) : existing?.userId,
-      forenclueId: forenclueId || existing?.forenclueId,
-      role: role || existing?.role,
-      department: department || existing?.department,
-      userAgent: userAgent || existing?.userAgent,
+      userId: userId ? String(userId) : (existing?.userId || ''),
+      forenclueId: forenclueId || existing?.forenclueId || '',
+      role: role || existing?.role || '',
+      department: department || existing?.department || '',
+      userAgent: userAgent || existing?.userAgent || '',
       createdAt: existing?.createdAt || now,
       updatedAt: now
-    });
+    };
+
+    pushSubscriptions.set(endpoint, record);
+
+    if (serverFirestoreDb) {
+      try {
+        const safeDocId = Buffer.from(endpoint).toString('base64').replace(/[/+=]/g, '_').slice(-60);
+        await setDoc(doc(serverFirestoreDb, 'push_subscriptions', safeDocId), {
+          endpoint: record.endpoint,
+          keys: record.keys,
+          userId: record.userId,
+          forenclueId: record.forenclueId,
+          role: record.role,
+          department: record.department,
+          userAgent: record.userAgent,
+          updatedAt: record.updatedAt
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Firestore subscription save warning on server:', err);
+      }
+    }
 
     res.status(200).json({ success: true, count: pushSubscriptions.size });
   } catch (error) {
@@ -115,11 +189,17 @@ app.post('/api/push/subscribe', (req, res) => {
 });
 
 // Unsubscribe an endpoint
-app.post('/api/push/unsubscribe', (req, res) => {
+app.post('/api/push/unsubscribe', async (req, res) => {
   try {
     const { endpoint } = req.body;
-    if (endpoint && pushSubscriptions.has(endpoint)) {
+    if (endpoint) {
       pushSubscriptions.delete(endpoint);
+      if (serverFirestoreDb) {
+        try {
+          const safeDocId = Buffer.from(endpoint).toString('base64').replace(/[/+=]/g, '_').slice(-60);
+          await deleteDoc(doc(serverFirestoreDb, 'push_subscriptions', safeDocId));
+        } catch {}
+      }
     }
     res.json({ success: true });
   } catch (error) {
@@ -133,7 +213,7 @@ app.post('/api/push/test', async (req, res) => {
     const { userId, title, body } = req.body;
     const targetPayload = JSON.stringify({
       title: title || 'ForenClue Background Alert',
-      body: body || 'Background push notifications are working perfectly! You will receive real-time task allotments, chat alerts, and announcements on your Home Screen.',
+      body: body || 'Background push notifications are working! Real-time workspace alerts will appear on your lock screen.',
       icon: '/app-icon-192.png',
       badge: '/favicon.png',
       url: '/profile',
@@ -141,16 +221,21 @@ app.post('/api/push/test', async (req, res) => {
       data: { url: '/profile' }
     });
 
-    let targets = Array.from(pushSubscriptions.values());
+    const allSubscriptions = await getAllPushSubscriptions();
+    let targets = allSubscriptions;
     if (userId) {
-      const userMatches = targets.filter(s => s.userId === String(userId));
+      const targetStr = String(userId).trim().toLowerCase();
+      const userMatches = allSubscriptions.filter(s => 
+        (s.userId && s.userId.trim().toLowerCase() === targetStr) ||
+        (s.forenclueId && s.forenclueId.trim().toLowerCase() === targetStr)
+      );
       if (userMatches.length > 0) {
         targets = userMatches;
       }
     }
 
     if (targets.length === 0) {
-      res.status(404).json({ error: 'No active push subscriptions found on this device. Please enable notifications first.' });
+      res.status(404).json({ error: 'No active push subscriptions found. Please grant notification permission on this device first.' });
       return;
     }
 
@@ -165,26 +250,37 @@ app.post('/api/push/test', async (req, res) => {
               endpoint: sub.endpoint,
               keys: sub.keys
             },
-            targetPayload
+            targetPayload,
+            {
+              TTL: 86400,
+              urgency: 'high'
+            }
           );
           sent++;
         } catch (err: any) {
           failed++;
+          console.warn('Push delivery error for endpoint:', sub.endpoint.substring(0, 40), err.statusCode, err.message);
           if (err.statusCode === 404 || err.statusCode === 410) {
             pushSubscriptions.delete(sub.endpoint);
+            if (serverFirestoreDb) {
+              try {
+                const safeDocId = Buffer.from(sub.endpoint).toString('base64').replace(/[/+=]/g, '_').slice(-60);
+                await deleteDoc(doc(serverFirestoreDb, 'push_subscriptions', safeDocId));
+              } catch {}
+            }
           }
         }
       })
     );
 
-    res.json({ success: true, message: `Notification dispatched to ${sent} active device(s).`, sent, failed });
+    res.json({ success: true, message: `Dispatched background notification to ${sent} device(s).`, sent, failed, total: targets.length });
   } catch (error: any) {
     console.error('Error sending test push notification:', error);
     res.status(500).json({ error: error?.message || 'Failed to send test push notification.' });
   }
 });
 
-// Broadcast or target push notification to members
+// Broadcast or target push notification to members (Messages, Tasks, Announcements)
 app.post('/api/push/send', async (req, res) => {
   try {
     const { userId, title, body, icon, badge, url, tag, data } = req.body;
@@ -204,13 +300,18 @@ app.post('/api/push/send', async (req, res) => {
       data: { url: url || '/', ...data }
     });
 
-    let targets = Array.from(pushSubscriptions.values());
+    const allSubscriptions = await getAllPushSubscriptions();
+    let targets = allSubscriptions;
     if (userId && userId !== 'ALL') {
-      targets = targets.filter(s => s.userId === String(userId));
+      const targetStr = String(userId).trim().toLowerCase();
+      targets = allSubscriptions.filter(s => 
+        (s.userId && s.userId.trim().toLowerCase() === targetStr) ||
+        (s.forenclueId && s.forenclueId.trim().toLowerCase() === targetStr)
+      );
     }
 
     if (targets.length === 0) {
-      res.json({ success: true, sent: 0, message: 'No registered push devices for target.' });
+      res.json({ success: true, sent: 0, message: 'No registered push devices for target recipient.' });
       return;
     }
 
@@ -225,13 +326,24 @@ app.post('/api/push/send', async (req, res) => {
               endpoint: sub.endpoint,
               keys: sub.keys
             },
-            payload
+            payload,
+            {
+              TTL: 86400,
+              urgency: 'high'
+            }
           );
           sent++;
         } catch (err: any) {
           failed++;
+          console.warn('Push delivery failed for endpoint:', sub.endpoint.substring(0, 40), err.statusCode, err.message);
           if (err.statusCode === 404 || err.statusCode === 410) {
             pushSubscriptions.delete(sub.endpoint);
+            if (serverFirestoreDb) {
+              try {
+                const safeDocId = Buffer.from(sub.endpoint).toString('base64').replace(/[/+=]/g, '_').slice(-60);
+                await deleteDoc(doc(serverFirestoreDb, 'push_subscriptions', safeDocId));
+              } catch {}
+            }
           }
         }
       })

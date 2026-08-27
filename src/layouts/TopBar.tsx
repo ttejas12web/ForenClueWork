@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { subscribeToUserNotifications, markNotificationRead, markAllNotificationsRead, type FirestoreNotification } from '../lib/firestoreService';
+import { showDeviceNotification } from '../lib/pushNotifications';
 
 interface TopBarProps {
   mobileMenuOpen: boolean;
@@ -37,12 +38,13 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
           // This is a new notification!
           knownNotifIds.current.add(notif.id);
           
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification(notif.title, {
-              body: notif.message,
-              icon: '/favicon.ico', // Optional icon
-            });
-          }
+          showDeviceNotification(notif.title, {
+            body: notif.message,
+            icon: '/app-icon-192.png',
+            badge: '/favicon.png',
+            url: notif.link || '/tasks',
+            tag: `notif-${notif.id}`
+          });
         }
       });
       

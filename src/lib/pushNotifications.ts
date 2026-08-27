@@ -277,3 +277,61 @@ export async function dispatchBackgroundPush(payload: {
     return false;
   }
 }
+
+export async function showDeviceNotification(
+  title: string,
+  options?: {
+    body?: string;
+    icon?: string;
+    badge?: string;
+    tag?: string;
+    url?: string;
+    data?: any;
+    silent?: boolean;
+  }
+): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+
+  const notifOptions: NotificationOptions = {
+    body: options?.body || '',
+    icon: options?.icon || '/app-icon-192.png',
+    badge: options?.badge || '/favicon.png',
+    tag: options?.tag || `notif-${Date.now()}`,
+    data: {
+      url: options?.url || '/',
+      ...(options?.data || {})
+    }
+  };
+
+  // 1. Try Service Worker showNotification (Supported on Android Chrome, iOS 16.4+ PWA, and Desktop)
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      if (registration && typeof registration.showNotification === 'function') {
+        await registration.showNotification(title, notifOptions);
+        return true;
+      }
+    } catch (swErr) {
+      console.warn('Service worker showNotification notice:', swErr);
+    }
+  }
+
+  // 2. Safe fallback for desktop browsers
+  try {
+    const notif = new Notification(title, {
+      body: notifOptions.body,
+      icon: notifOptions.icon,
+      tag: notifOptions.tag
+    });
+    if (options?.url) {
+      notif.onclick = () => {
+        window.focus();
+        window.location.href = options.url!;
+      };
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}

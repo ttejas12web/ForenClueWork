@@ -1165,17 +1165,31 @@ export async function sendFirestoreMessage(
 
       // Dispatch background push notifications to recipient members
       if (groupData?.memberIds && groupData.memberIds.length > 0) {
-        const otherMembers = groupData.memberIds.filter(id => id !== senderId);
-        const alertTitle = groupData.type === 'DIRECT' ? senderName : `${groupData.name || 'Chat'}: ${senderName}`;
-        const alertBody = isE2EE ? 'New encrypted message' : (finalContent || (attachment ? `📎 ${attachment.name}` : 'Sent a message'));
+        const otherMembers = groupData.memberIds.filter(id => String(id) !== String(senderId));
+        const alertTitle = groupData.type === 'DIRECT' ? senderName : `${groupData.name || 'Group Chat'}: ${senderName}`;
+        
+        let alertBody = 'Sent a message';
+        if (isE2EE) {
+          alertBody = '🔒 New encrypted message';
+        } else if (finalContent) {
+          alertBody = finalContent.length > 120 ? `${finalContent.slice(0, 117)}...` : finalContent;
+        } else if (attachment) {
+          alertBody = attachment.type === 'image' ? `📷 Photo: ${attachment.name}` : `📎 File: ${attachment.name}`;
+        }
         
         for (const recipientId of otherMembers) {
           dispatchBackgroundPush({
-            userId: recipientId,
+            userId: String(recipientId),
             title: alertTitle,
             body: alertBody,
-            url: '/chat',
-            tag: `chat-${groupId}`
+            url: `/chat?groupId=${groupId}`,
+            tag: `chat-${groupId}`,
+            data: {
+              groupId,
+              senderId: String(senderId),
+              senderName,
+              url: `/chat?groupId=${groupId}`
+            }
           }).catch(err => console.warn('Background push dispatch for chat message failed:', err));
         }
       }
