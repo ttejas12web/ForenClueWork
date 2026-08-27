@@ -2,14 +2,39 @@
 // Supports background notifications on Android, iOS PWA (iOS 16.4+), and Desktop
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
+  const cleanStr = base64String.trim().replace(/\s+/g, '');
+  const padding = '='.repeat((4 - (cleanStr.length % 4)) % 4);
+  const base64 = (cleanStr + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+
+  try {
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  } catch (e) {
+    console.warn('atob failed, using manual base64 buffer decode:', e);
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const bytes: number[] = [];
+    let buffer = 0;
+    let bits = 0;
+    for (let i = 0; i < base64.length; i++) {
+      const c = base64[i];
+      if (c === '=') break;
+      const val = chars.indexOf(c);
+      if (val === -1) continue;
+      buffer = (buffer << 6) | val;
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        bytes.push((buffer >> bits) & 0xff);
+      }
+    }
+    return new Uint8Array(bytes);
   }
-  return outputArray;
 }
 
 export function isPushNotificationSupported(): boolean {
@@ -27,6 +52,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   }
   try {
     const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    await registration.update().catch(() => {});
     return registration;
   } catch (error) {
     console.error('Service worker registration failed:', error);
@@ -85,15 +111,40 @@ export async function subscribeToPushNotifications(userInfo?: {
       throw new Error('Push notification server key is missing.');
     }
 
-    const applicationServerKey = urlBase64ToUint8Array(publicKey);
+    const cleanKey = String(publicKey).trim().replace(/\s+/g, '');
+    const uint8Key = urlBase64ToUint8Array(cleanKey);
 
     // 4. Check for existing subscription or create new
     let subscription = await registration.pushManager.getSubscription();
+    
     if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey
-      });
+      // Attempt 1: Standard Uint8Array
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: uint8Key
+        });
+      } catch (err1: any) {
+        console.warn('Subscription with Uint8Array failed, trying ArrayBuffer:', err1);
+        try {
+          // Attempt 2: ArrayBuffer (Safari WebKit BufferSource compatibility)
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: uint8Key.buffer
+          });
+        } catch (err2: any) {
+          console.warn('Subscription with ArrayBuffer failed, trying Base64URL string:', err2);
+          // Attempt 3: URL-Safe Base64 string directly (WebKit DOMString)
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: cleanKey
+          });
+        }
+      }
+    }
+
+    if (!subscription) {
+      throw new Error('Could not establish push notification subscription on this device.');
     }
 
     // 5. Send subscription details to server
