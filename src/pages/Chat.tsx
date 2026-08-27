@@ -25,7 +25,10 @@ import {
   Paperclip,
   FileText,
   Lock,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2,
+  Download,
+  ExternalLink
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { apiFetch } from '../lib/api';
@@ -33,10 +36,21 @@ import { uploadWorkspaceFile } from '../lib/storageService';
 
 function formatAttachmentUrl(url?: string | null): string {
   if (!url) return '';
+  if (url.startsWith('data:')) return url;
   if (url.startsWith('http://localhost:3000/') || url.startsWith('http://127.0.0.1:3000/')) {
     return url.replace(/^http:\/\/(localhost|127\.0\.0\.1):3000/, '');
   }
   return url;
+}
+
+function isImageAttachment(url?: string | null, name?: string | null, type?: string | null): boolean {
+  if (!url) return false;
+  if (type === 'image' || type?.startsWith('image/')) return true;
+  if (url.startsWith('data:image/')) return true;
+  if (name && /\.(jpg|jpeg|png|gif|webp|svg|avif|bmp|ico)$/i.test(name)) return true;
+  const cleanUrl = url.split('?')[0].split('#')[0];
+  if (/\.(jpg|jpeg|png|gif|webp|svg|avif|bmp|ico)$/i.test(cleanUrl)) return true;
+  return false;
 }
 
 interface ChatMember {
@@ -164,6 +178,10 @@ export const Chat = () => {
   const [editCustomAvatarUrl, setEditCustomAvatarUrl] = useState('');
   const [editUploadedAvatarPreview, setEditUploadedAvatarPreview] = useState('');
   const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
+
+  // Message Deletion State for Admins & Members
+  const [messageToDelete, setMessageToDelete] = useState<ChatMessage | null>(null);
+  const [isDeletingMessage, setIsDeletingMessage] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -382,14 +400,16 @@ export const Chat = () => {
 
     setIsSending(true);
     const content = messageText.trim();
-    let attachmentUrl = null;
-    let attachmentName = null;
+    let attachmentUrl: string | null = null;
+    let attachmentName: string | null = null;
+    let attachmentType: string | undefined = undefined;
 
     try {
       if (selectedFile) {
+        attachmentType = selectedFile.type.startsWith('image/') ? 'image' : 'file';
         const uploadResult = await uploadWorkspaceFile(selectedFile, selectedFile.name, 'chat_attachments', token);
         attachmentUrl = uploadResult.url;
-        attachmentName = uploadResult.name;
+        attachmentName = uploadResult.name || selectedFile.name;
       }
 
       const res = await apiFetch(`/api/chat/groups/${activeGroup.id}/messages`, {
@@ -402,21 +422,29 @@ export const Chat = () => {
           content, 
           attachmentUrl, 
           attachmentName,
+          attachmentType,
           senderId: user?.id 
         })
       });
 
       if (res.ok) {
         const newMsg = await res.json();
-        setMessages(prev => [...prev, newMsg]);
+        setMessages(prev => {
+          if (prev.some(m => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
         setMessageText('');
         setSelectedFile(null);
         setSelectedFilePreview(null);
         if (messageFileInputRef.current) messageFileInputRef.current.value = '';
         fetchGroups(false);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || 'Failed to deliver message. Please try again.');
       }
-    } catch (err) {
-      console.error('Failed to send message', err);
+    } catch (err: any) {
+      console.error('Failed to send message:', err);
+      alert(err.message || 'Failed to deliver attachment or message. Please check your network and try again.');
     } finally {
       setIsSending(false);
     }
@@ -693,6 +721,48 @@ export const Chat = () => {
       }
     } catch (err) {
       console.error('Failed to delete group', err);
+    }
+  };
+
+  // Delete Sent Message (Admins and Members)
+  const handleDeleteMessage = async () => {
+    if (!messageToDelete || !activeGroup || isDeletingMessage) return;
+
+    const isMe = String(messageToDelete.senderId) === String(user?.id) || 
+                 String(messageToDelete.senderForenclueId) === String(user?.forenclueId);
+    const isAdmin = user?.role === 'SUPER_ADMIN' || (user?.role as string) === 'ADMIN';
+
+    if (!isMe && !isAdmin) {
+      alert('You can only delete your own sent messages.');
+      setMessageToDelete(null);
+      return;
+    }
+
+    setIsDeletingMessage(true);
+    const targetMsgId = messageToDelete.id;
+
+    try {
+      // Optimistically remove from state
+      setMessages(prev => prev.filter(m => m.id !== targetMsgId));
+
+      const res = await apiFetch(`/api/chat/groups/${activeGroup.id}/messages/${targetMsgId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        // If failed, refetch to restore
+        await fetchMessages(activeGroup.id);
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to delete message');
+      }
+    } catch (err: any) {
+      console.error('Failed to delete message:', err);
+      await fetchMessages(activeGroup.id);
+      alert(err.message || 'Failed to delete message');
+    } finally {
+      setIsDeletingMessage(false);
+      setMessageToDelete(null);
     }
   };
 
@@ -1110,9 +1180,12 @@ export const Chat = () => {
               )
             ) : (
               messages.map((msg) => {
-                const isMe = msg.senderId === user?.id;
+                const isMe = String(msg.senderId) === String(user?.id) || 
+                             String(msg.senderForenclueId) === String(user?.forenclueId);
                 const isMsgSuperAdmin = msg.senderRole === 'SUPER_ADMIN';
                 const isSystemNotice = msg.content.startsWith('👋') || msg.content.startsWith('➕') || msg.content.startsWith('➖') || msg.content.startsWith('🚪');
+                const isAdmin = user?.role === 'SUPER_ADMIN' || (user?.role as string) === 'ADMIN';
+                const canDelete = isMe || isAdmin;
 
                 if (isSystemNotice) {
                   return (
@@ -1146,7 +1219,7 @@ export const Chat = () => {
                     </div>
 
                     {/* Message Bubble */}
-                    <div className={`max-w-[85%] sm:max-w-lg ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
+                    <div className={`max-w-[85%] sm:max-w-lg ${isMe ? 'items-end' : 'items-start'} flex flex-col group`}>
                       <div className="flex items-center space-x-1.5 sm:space-x-2 mb-1 px-1">
                         <span className="text-[11px] font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">
                           {isMe ? 'You' : msg.senderName}
@@ -1164,38 +1237,66 @@ export const Chat = () => {
                         </span>
                       </div>
 
-                      <div
-                        className={`p-3 sm:p-3.5 rounded-2xl text-xs leading-relaxed shadow-xs break-words ${
-                          isMe
-                            ? 'bg-blue-600 text-white rounded-tr-none'
-                            : 'bg-white border border-slate-200/90 text-slate-800 rounded-tl-none'
-                        }`}
-                      >
-                        {msg.content}
-                        {msg.attachmentUrl && !msg.isEncrypted && (
-                          <div className="mt-2 pt-2 border-t border-white/20">
-                            {msg.attachmentUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                              <a href={formatAttachmentUrl(msg.attachmentUrl)} target="_blank" rel="noopener noreferrer" className="block">
-                                <img 
-                                  src={formatAttachmentUrl(msg.attachmentUrl)} 
-                                  alt={msg.attachmentName || 'Attachment'} 
-                                  className="max-h-48 rounded-xl object-cover border border-white/20 shadow-xs hover:opacity-95 transition-opacity"
-                                />
-                              </a>
-                            ) : (
-                              <a 
-                                href={formatAttachmentUrl(msg.attachmentUrl)} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className={`flex items-center space-x-2 p-2 rounded-xl border transition-colors ${
-                                  isMe ? 'bg-blue-700/80 border-blue-400 text-white hover:bg-blue-700' : 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100'
-                                }`}
-                              >
-                                <Paperclip className="h-4 w-4 flex-shrink-0" />
-                                <span className="text-xs font-semibold truncate">{msg.attachmentName || 'Download File'}</span>
-                              </a>
-                            )}
-                          </div>
+                      <div className={`flex items-center space-x-1.5 ${isMe ? 'flex-row-reverse space-x-reverse' : 'flex-row'}`}>
+                        <div
+                          className={`p-3 sm:p-3.5 rounded-2xl text-xs leading-relaxed shadow-xs break-words ${
+                            isMe
+                              ? 'bg-blue-600 text-white rounded-tr-none'
+                              : 'bg-white border border-slate-200/90 text-slate-800 rounded-tl-none'
+                          }`}
+                        >
+                          {msg.content}
+                          {msg.attachmentUrl && !msg.isEncrypted && (
+                            <div className="mt-2 pt-2 border-t border-white/20">
+                              {isImageAttachment(msg.attachmentUrl, msg.attachmentName, msg.attachmentType) ? (
+                                <a 
+                                  href={formatAttachmentUrl(msg.attachmentUrl)} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="block group/img relative overflow-hidden rounded-xl"
+                                >
+                                  <img 
+                                    src={formatAttachmentUrl(msg.attachmentUrl)} 
+                                    alt={msg.attachmentName || 'Attachment'} 
+                                    referrerPolicy="no-referrer"
+                                    loading="lazy"
+                                    className="max-h-56 max-w-full rounded-xl object-contain bg-black/5 border border-white/20 shadow-xs group-hover/img:opacity-95 transition-opacity"
+                                  />
+                                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] font-semibold space-x-1 backdrop-blur-[2px]">
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                    <span>Open Full Preview</span>
+                                  </div>
+                                </a>
+                              ) : (
+                                <a 
+                                  href={formatAttachmentUrl(msg.attachmentUrl)} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  download={msg.attachmentName || 'attachment'}
+                                  className={`flex items-center space-x-2 p-2.5 rounded-xl border transition-colors ${
+                                    isMe ? 'bg-blue-700/80 border-blue-400 text-white hover:bg-blue-700' : 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  <Paperclip className="h-4 w-4 flex-shrink-0 text-blue-400" />
+                                  <span className="text-xs font-semibold truncate flex-1">{msg.attachmentName || 'Download File'}</span>
+                                  <Download className="h-3.5 w-3.5 opacity-70 flex-shrink-0" />
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Delete Message Action Button (Admins & Members) */}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => setMessageToDelete(msg)}
+                            className="opacity-0 group-hover:opacity-100 focus:opacity-100 hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer flex-shrink-0"
+                            title={isMe ? "Delete your sent message" : "Delete message (Admin moderation)"}
+                            aria-label="Delete message"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1263,8 +1364,17 @@ export const Chat = () => {
                 disabled={(!messageText.trim() && !selectedFile) || isSending}
                 className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-semibold text-xs rounded-xl shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer min-h-[40px]"
               >
-                <Send className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Send</span>
+                {isSending ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span className="hidden sm:inline">Sending...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Send</span>
+                  </>
+                )}
               </button>
             </form>
           </div>
@@ -2010,6 +2120,60 @@ export const Chat = () => {
                   )}
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Message Confirmation Modal (Admins & Members) */}
+      {messageToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 text-center animate-in zoom-in-95 duration-150">
+            <div className="h-12 w-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-3.5 border border-rose-100">
+              <Trash2 className="h-6 w-6" />
+            </div>
+
+            <h3 className="text-base font-bold text-slate-800 mb-1">Delete Message?</h3>
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+              {String(messageToDelete.senderId) === String(user?.id) || String(messageToDelete.senderForenclueId) === String(user?.forenclueId)
+                ? 'Are you sure you want to delete this message you sent? It will be permanently removed for everyone in this workspace channel.'
+                : `Are you sure you want to delete this message by ${messageToDelete.senderName}? As an Admin, this will remove it for everyone in this channel.`}
+            </p>
+
+            {/* Message preview snippet */}
+            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-left text-xs text-slate-700 mb-4.5 max-h-24 overflow-y-auto break-words">
+              <div className="text-[10px] font-bold text-slate-400 mb-1">
+                {messageToDelete.senderName} • {new Date(messageToDelete.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <p className="text-slate-800 font-medium">
+                {messageToDelete.content || (messageToDelete.attachmentName ? `📎 ${messageToDelete.attachmentName}` : 'Attachment file')}
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2.5">
+              <button
+                type="button"
+                disabled={isDeletingMessage}
+                onClick={() => setMessageToDelete(null)}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingMessage}
+                onClick={handleDeleteMessage}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingMessage ? (
+                  <span>Deleting...</span>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Delete Message</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

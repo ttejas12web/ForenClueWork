@@ -1338,6 +1338,16 @@ export async function deleteFirestoreChatGroup(groupId: string): Promise<void> {
   }
 }
 
+export async function deleteFirestoreMessage(groupId: string, messageId: string): Promise<void> {
+  try {
+    const msgDoc = doc(db, `chat_groups/${groupId}/messages`, messageId);
+    await deleteDoc(msgDoc);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `chat_groups/${groupId}/messages/${messageId}`);
+    throw error;
+  }
+}
+
 // ----------------------------------------------------
 // ANNOUNCEMENTS SERVICE
 // ----------------------------------------------------

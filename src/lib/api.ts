@@ -14,6 +14,7 @@ import {
   getOrCreateDirectChat,
   sendFirestoreMessage,
   deleteFirestoreChatGroup,
+  deleteFirestoreMessage,
   updateFirestoreChatGroup,
   addFirestoreChatGroupMembers,
   removeFirestoreChatGroupMember
@@ -358,14 +359,25 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
     
     let attachment: any = undefined;
     if (body.attachmentUrl) {
+      const isImg = body.attachmentType === 'image' || 
+                    (typeof body.attachmentUrl === 'string' && body.attachmentUrl.startsWith('data:image/')) ||
+                    (body.attachmentName && /\.(jpg|jpeg|png|gif|webp|svg|avif|bmp|ico)$/i.test(body.attachmentName));
       attachment = {
         url: body.attachmentUrl,
         name: body.attachmentName || 'Attachment',
-        type: 'file'
+        type: isImg ? 'image' : (body.attachmentType || 'file')
       };
     }
     const newMsg = await sendFirestoreMessage(groupId, sender, body.content || '', attachment);
     return newMsg;
+  }
+
+  if (endpoint.startsWith('/api/chat/groups/') && endpoint.includes('/messages/') && method === 'DELETE') {
+    const parts = endpoint.split('/');
+    const groupId = parts[4];
+    const messageId = parts[6];
+    await deleteFirestoreMessage(groupId, messageId);
+    return { success: true };
   }
 
   if (endpoint.startsWith('/api/chat/groups/') && endpoint.endsWith('/members') && method === 'POST') {
