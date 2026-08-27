@@ -117,17 +117,19 @@ export const Profile = () => {
   const [myTasks, setMyTasks] = useState<TaskItem[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
 
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default');
 
   useEffect(() => {
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission);
+    } else {
+      setNotificationPermission('unsupported');
     }
   }, []);
 
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) {
-      alert('This browser does not support desktop notifications.');
+      setNotificationPermission('unsupported');
       return;
     }
     
@@ -935,7 +937,11 @@ export const Profile = () => {
                   </h4>
                   <p className="text-[11px] text-slate-500 mt-0.5">Receive alerts for tasks</p>
                 </div>
-                {notificationPermission === 'granted' ? (
+                {notificationPermission === 'unsupported' ? (
+                  <span className="px-2.5 py-1 bg-slate-100 text-slate-600 font-bold rounded-lg text-[10px]">
+                    Unsupported
+                  </span>
+                ) : notificationPermission === 'granted' ? (
                   <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-[10px] flex items-center space-x-1">
                     <CheckCircle2 className="h-3 w-3" />
                     <span>Enabled</span>
@@ -954,8 +960,13 @@ export const Profile = () => {
                 )}
               </div>
               {notificationPermission === 'denied' && (
-                <p className="text-[10px] text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100">
+                <p className="text-[10px] text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100 mt-2">
                   You have blocked notifications. Please check your browser settings to allow them.
+                </p>
+              )}
+              {notificationPermission === 'unsupported' && (
+                <p className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 mt-2 leading-relaxed">
+                  Push notifications are not natively supported in your current browser session. On iOS, you must add this app to your Home Screen (Share &gt; Add to Home Screen) to enable notifications.
                 </p>
               )}
             </div>
