@@ -20,11 +20,7 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
   const knownNotifIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if ('Notification' in window) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
-    }
+    // Only check if notifications are allowed natively when push triggers
   }, []);
 
   useEffect(() => {

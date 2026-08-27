@@ -29,6 +29,8 @@ import {
   QrCode,
   Fingerprint,
   BadgeCheck,
+  Bell,
+  BellRing,
   Activity,
   Layers
 } from 'lucide-react';
@@ -114,6 +116,34 @@ export const Profile = () => {
   // User Tasks
   const [myTasks, setMyTasks] = useState<TaskItem[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
+  const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      alert('This browser does not support desktop notifications.');
+      return;
+    }
+    
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        new Notification('Notifications Enabled', {
+          body: 'You will now receive alerts for tasks and updates.',
+          icon: '/favicon.ico'
+        });
+      }
+    } catch (error) {
+      console.error('Error requesting notification permission:', error);
+    }
+  };
 
   // Initialize fields
   useEffect(() => {
@@ -445,7 +475,7 @@ export const Profile = () => {
           }`}
         >
           <Lock className="h-4 w-4" />
-          <span>Security & Password</span>
+          <span>Security & Settings</span>
         </button>
 
         <button
@@ -891,6 +921,43 @@ export const Profile = () => {
                   Do not share your ForenClue credentials or session tokens. All task updates and messages are cryptographically logged with your ForenClue ID.
                 </p>
               </div>
+            </div>
+
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 pt-2">
+              Workspace Settings
+            </h3>
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 text-xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-slate-900 flex items-center space-x-1.5">
+                    <Bell className="h-4 w-4 text-blue-600" />
+                    <span>Push Notifications</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Receive alerts for tasks</p>
+                </div>
+                {notificationPermission === 'granted' ? (
+                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-[10px] flex items-center space-x-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>Enabled</span>
+                  </span>
+                ) : notificationPermission === 'denied' ? (
+                  <span className="px-2.5 py-1 bg-rose-100 text-rose-700 font-bold rounded-lg text-[10px]">
+                    Blocked
+                  </span>
+                ) : (
+                  <button
+                    onClick={requestNotificationPermission}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors cursor-pointer"
+                  >
+                    Enable
+                  </button>
+                )}
+              </div>
+              {notificationPermission === 'denied' && (
+                <p className="text-[10px] text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100">
+                  You have blocked notifications. Please check your browser settings to allow them.
+                </p>
+              )}
             </div>
           </div>
         </div>
