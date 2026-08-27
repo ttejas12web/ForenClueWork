@@ -53,6 +53,7 @@ export interface WorkspaceTask {
   description: string | null;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED' | 'SUBMITTED' | 'UNDER REVIEW';
+  progress?: number;
   assignedTo: any;
   department: string | null;
   dueDate: string | null;
@@ -294,6 +295,20 @@ export const Tasks: React.FC = () => {
       alert(err.message || 'Failed to save task');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleUpdateProgress = async (task: WorkspaceTask, progress: number) => {
+    if (!user) return;
+    try {
+      const updates: Partial<FirestoreTask> = { progress };
+      if (progress > 0 && task.status === 'TODO') {
+        updates.status = 'IN_PROGRESS';
+      }
+      await updateFirestoreTask(task.id, updates);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to update progress');
     }
   };
 
@@ -675,7 +690,7 @@ export const Tasks: React.FC = () => {
             );
 
             // Progress percentage
-            const progressPct = isCompleted ? 100 : isInProgress ? 50 : 0;
+            const progressPct = task.progress ?? (isCompleted ? 100 : isInProgress ? 50 : 0);
             const hasDeliverableFiles = (task.deliverableFiles && task.deliverableFiles.length > 0) || Boolean(task.deliverableAttachmentUrl);
 
             return (
@@ -761,14 +776,39 @@ export const Tasks: React.FC = () => {
                         {progressPct}% • {isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Not Started'}
                       </span>
                     </div>
-                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div className="w-full h-1.5 rounded-full overflow-hidden flex items-center relative bg-slate-100 group">
+                      {isAllottedWorker && !isCompleted && (
+                        <div className="absolute inset-0 flex">
+                          {[0, 25, 50, 75, 100].map(pct => (
+                            <button 
+                              key={pct}
+                              onClick={() => handleUpdateProgress(task, pct)}
+                              className="flex-1 h-full z-10 hover:bg-black/10 transition-colors cursor-pointer"
+                              title={`Set progress to ${pct}%`}
+                            />
+                          ))}
+                        </div>
+                      )}
                       <div 
-                        className={`h-full transition-all duration-300 ${
+                        className={`h-full transition-all duration-300 pointer-events-none relative z-0 ${
                           isCompleted ? 'bg-emerald-500' : isInProgress ? 'bg-blue-600' : 'bg-slate-300'
                         }`}
                         style={{ width: `${progressPct}%` }}
                       />
                     </div>
+                    {isAllottedWorker && !isCompleted && (
+                      <div className="flex justify-between w-full px-0.5 mt-0.5">
+                        {[0, 25, 50, 75, 100].map(pct => (
+                          <span 
+                            key={pct} 
+                            className={`text-[8px] font-medium cursor-pointer transition-colors ${progressPct >= pct ? 'text-blue-600 hover:text-blue-700' : 'text-slate-300 hover:text-slate-500'}`} 
+                            onClick={() => handleUpdateProgress(task, pct)}
+                          >
+                            {pct}%
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Deliverable Evidence Preview Pill (If submitted or attachments exist) */}

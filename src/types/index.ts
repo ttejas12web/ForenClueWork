@@ -33,6 +33,7 @@ export interface Task {
   priority: TaskPriority;
   deadline: number; // timestamp
   status: TaskStatus;
+  progress?: number;
   attachments?: string[]; // urls
   createdAt: number;
   updatedAt: number;
@@ -81,4 +82,35 @@ export interface WorkspaceEvent {
   description?: string;
   createdAt?: number;
 }
+
+export interface DepartmentConfig {
+  name: string;
+  code: string;
+  mentorName: string;
+  mentorId: string;
+  mentorEmail: string;
+  desc?: string;
+  color?: string;
+  badgeColor?: string;
+}
+
+export interface SystemSettings {
+  id: string;
+  workspaceName: string;
+  workspaceTagline: string;
+  defaultPassword: string;
+  enforceFirstTimePasswordReset: boolean;
+  autoJoinDepartmentChat: boolean;
+  enforceTaskRoleAllotment: boolean;
+  requireDeliverableApproval: boolean;
+  systemBannerMessage: string;
+  systemBannerActive: boolean;
+  sessionTimeoutMinutes: number;
+  maintenanceMode: boolean;
+  departments: DepartmentConfig[];
+  updatedAt?: string;
+  updatedBy?: string;
+  updatedByEmail?: string;
+}
+
 

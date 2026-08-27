@@ -1,24 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Search, LogOut, Menu, Shield, Crown, User, Check, X, CheckSquare, Sparkles, ExternalLink, CheckCheck } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
+import { subscribeToUserNotifications, markNotificationRead, markAllNotificationsRead, type FirestoreNotification } from '../lib/firestoreService';
 
 interface TopBarProps {
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
-}
-
-interface NotificationItem {
-  id: number;
-  userId: number;
-  senderId?: number;
-  title: string;
-  message: string;
-  type: string;
-  link?: string;
-  read: boolean;
-  createdAt: string;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpen }) => {
@@ -26,54 +15,63 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
   const location = useLocation();
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notifications, setNotifications] = useState<FirestoreNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-
-  const fetchNotifications = async () => {
-    if (!token) return;
-    try {
-      const res = await apiFetch('/api/notifications', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount(data.unreadCount || 0);
-      }
-    } catch (err) {
-      console.error('Error fetching notifications:', err);
-    }
-  };
+  const knownNotifIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 6000);
-    return () => clearInterval(interval);
-  }, [token]);
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const unsubscribe = subscribeToUserNotifications(String(user.id), (fetchedNotifications) => {
+      setNotifications(fetchedNotifications);
+      setUnreadCount(fetchedNotifications.filter(n => !n.read).length);
+      
+      // Check for new notifications to push
+      const currentIds = new Set(knownNotifIds.current);
+      fetchedNotifications.forEach(notif => {
+        if (!currentIds.has(notif.id) && !notif.read) {
+          // This is a new notification!
+          knownNotifIds.current.add(notif.id);
+          
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(notif.title, {
+              body: notif.message,
+              icon: '/favicon.ico', // Optional icon
+            });
+          }
+        }
+      });
+      
+      // Initialize known IDs if first load
+      if (currentIds.size === 0) {
+        fetchedNotifications.forEach(n => knownNotifIds.current.add(n.id));
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user?.id]);
 
   const handleMarkAllRead = async () => {
-    if (!token) return;
+    if (!user?.id) return;
     try {
-      await apiFetch('/api/notifications/read-all', {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      setUnreadCount(0);
+      await markAllNotificationsRead(String(user.id));
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleNotificationClick = async (notif: NotificationItem) => {
-    if (!notif.read && token) {
+  const handleNotificationClick = async (notif: FirestoreNotification) => {
+    if (!notif.read) {
       try {
-        await apiFetch(`/api/notifications/${notif.id}/read`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setNotifications(prev => prev.map(n => n.id === notif.id ? ({ ...n, read: true }) : n));
-        setUnreadCount(prev => Math.max(0, prev - 1));
+        await markNotificationRead(notif.id);
       } catch (err) {
         console.error(err);
       }

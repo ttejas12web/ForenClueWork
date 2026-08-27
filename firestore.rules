@@ -79,5 +79,10 @@ service cloud.firestore {
     match /projects/{projId} {
       allow read, write: if true;
     }
+
+    // System Settings & Policies
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
   }
 }

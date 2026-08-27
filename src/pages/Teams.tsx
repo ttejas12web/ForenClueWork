@@ -57,9 +57,9 @@ export const Teams = () => {
       name: 'Creative & Graphics', 
       desc: 'Visual evidence diagrams, case presentation layouts, UI design, infographics, and public communication assets.', 
       code: 'CD', 
-      mentorName: 'Ayush Gaikwad',
-      mentorId: 'FC-EMP-2026-003',
-      mentorEmail: 'ayush.gaikwad@forenclue.in',
+      mentorName: 'Tejas Tapse',
+      mentorId: 'FC-EMP-2026-001',
+      mentorEmail: 'ttapse12@gmail.com',
       color: 'bg-rose-600',
       badgeColor: 'bg-rose-50 text-rose-700 border-rose-200'
     },

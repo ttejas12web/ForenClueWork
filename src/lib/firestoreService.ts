@@ -49,6 +49,7 @@ export interface FirestoreTask {
   description: string | null;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED' | 'SUBMITTED' | 'UNDER REVIEW';
+  progress?: number;
   assignedTo: string | null;
   assignedUserName?: string;
   assignedUserEmail?: string;
@@ -175,10 +176,10 @@ export const SEED_USERS: FirestoreUser[] = [
     email: 'ttapse12@gmail.com',
     password: 'Tej@s3417',
     role: 'SUPER_ADMIN',
-    department: 'Cyber & Digital Forensics',
-    designation: 'Founder & Lead Forensic Specialist',
+    department: 'Creative & Graphics',
+    designation: 'Founder & Lead Forensic Specialist | Creative & Graphics Lead Mentor',
     phone: '+91 98765 43210',
-    bio: 'Lead forensic specialist and founder at ForenClue.',
+    bio: 'Lead forensic specialist, founder, and Lead Mentor for Creative & Graphics at ForenClue.',
     isDefaultPassword: false,
     tempPasswordChanged: true,
     active: true,
@@ -209,10 +210,10 @@ export const SEED_USERS: FirestoreUser[] = [
     email: 'ayush.gaikwad@forenclue.in',
     password: 'Forenclue@2026',
     role: 'SUPER_ADMIN',
-    department: 'Creative & Graphics',
-    designation: 'Super Administrator & Creative / Case Study Lead',
+    department: 'Case Study',
+    designation: 'Super Administrator & Case Study Lead Mentor',
     phone: '+91 98765 43212',
-    bio: 'Executive Super Admin & Creative & Case Study Mentor at ForenClue Workspace.',
+    bio: 'Executive Super Admin & Case Study Lead Mentor at ForenClue Workspace.',
     isDefaultPassword: true,
     tempPasswordChanged: false,
     active: true,
@@ -237,16 +238,33 @@ export const SEED_USERS: FirestoreUser[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'user_emp_005',
-    forenclueId: 'FC-EMP-2026-005',
-    name: 'Ananya Sharma',
-    email: 'ananya.sharma@forenclue.in',
+    id: 'user_vol_027',
+    forenclueId: 'FC-VOL-2026-027',
+    name: 'Pranav Kale',
+    email: 'pranav.kale@forenclue.in',
     password: 'Forenclue@2026',
-    role: 'EMPLOYEE',
+    role: 'VOLUNTEER',
     department: 'Creative & Graphics',
-    designation: 'Visual Forensic Designer',
-    phone: '+91 98765 43214',
-    bio: 'Forensic diagrams and digital infographics designer.',
+    designation: 'Forensic Graphic Designer & Volunteer',
+    phone: '+91 98765 43227',
+    bio: 'Visual evidence diagrams, case presentation graphics, and forensic infographics.',
+    isDefaultPassword: true,
+    tempPasswordChanged: false,
+    active: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'user_vol_003',
+    forenclueId: 'FC-VOL-2026-003',
+    name: 'Okeke Rejoice',
+    email: 'okeke.rejoice@forenclue.in',
+    password: 'Forenclue@2026',
+    role: 'VOLUNTEER',
+    department: 'Creative & Graphics',
+    designation: 'Creative Media & Graphic Designer Volunteer',
+    phone: '+91 98765 43203',
+    bio: 'Digital case infographics, UI/UX presentation, and creative media asset design.',
     isDefaultPassword: true,
     tempPasswordChanged: false,
     active: true,
@@ -353,7 +371,7 @@ const SEED_DEFAULT_GROUPS: Omit<FirestoreChatGroup, 'id'>[] = [
     isDirect: false,
     createdBy: 'user_admin_001',
     createdAt: new Date().toISOString(),
-    memberIds: ['user_admin_001', 'user_emp_003'],
+    memberIds: ['user_admin_001', 'user_vol_027'],
     lastMessageText: '',
     lastMessageAt: new Date().toISOString(),
   }
@@ -361,6 +379,17 @@ const SEED_DEFAULT_GROUPS: Omit<FirestoreChatGroup, 'id'>[] = [
 
 export async function ensureDefaultFirestoreSeed(): Promise<void> {
   try {
+    // 1. Remove deprecated / removed member FC-EMP-2026-005 (Ananya Sharma) if present in Firestore
+    try {
+      const deprecatedDocRef = doc(db, 'users', 'user_emp_005');
+      const depSnap = await getDoc(deprecatedDocRef);
+      if (depSnap.exists()) {
+        await deleteDoc(deprecatedDocRef);
+      }
+    } catch (e) {
+      console.warn('Deprecated user cleanup notice:', e);
+    }
+
     for (const u of SEED_USERS) {
       try {
         const userDocRef = doc(db, 'users', u.id);
@@ -382,8 +411,26 @@ export async function ensureDefaultFirestoreSeed(): Promise<void> {
                 email: 'ttapse12@gmail.com',
                 password: 'Tej@s3417',
                 role: 'SUPER_ADMIN',
-                department: 'Cyber & Digital Forensics',
-                designation: 'Founder & Forensic Lead'
+                department: 'Creative & Graphics',
+                designation: 'Founder & Lead Forensic Specialist | Creative & Graphics Lead Mentor'
+              });
+            }
+          }
+          
+          // Enforce department for Pranav Kale
+          if (u.id === 'user_vol_027' || u.forenclueId === 'FC-VOL-2026-027') {
+            if (existingData.department !== 'Creative & Graphics') {
+              await updateDoc(userDocRef, {
+                department: 'Creative & Graphics'
+              });
+            }
+          }
+
+          // Enforce removing Ayush Gaikwad from Creative & Graphics
+          if (u.id === 'user_emp_003' || u.forenclueId === 'FC-EMP-2026-003') {
+            if (existingData.department === 'Creative & Graphics') {
+              await updateDoc(userDocRef, {
+                department: 'Case Study'
               });
             }
           }
@@ -650,12 +697,16 @@ export async function fetchAllUsers(): Promise<FirestoreUser[]> {
     if (snap.empty) {
       await ensureDefaultFirestoreSeed();
       const freshSnap = await getDocs(usersCol);
-      return freshSnap.docs.map(d => normalizeUserRecord({ ...d.data(), id: d.id } as FirestoreUser));
+      return freshSnap.docs
+        .map(d => normalizeUserRecord({ ...d.data(), id: d.id } as FirestoreUser))
+        .filter(u => u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
     }
-    return snap.docs.map(d => {
-      const { password: _, ...rest } = d.data() as FirestoreUser;
-      return normalizeUserRecord({ ...rest, id: d.id } as FirestoreUser);
-    });
+    return snap.docs
+      .map(d => {
+        const { password: _, ...rest } = d.data() as FirestoreUser;
+        return normalizeUserRecord({ ...rest, id: d.id } as FirestoreUser);
+      })
+      .filter(u => u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'users');
     return [];
@@ -665,10 +716,12 @@ export async function fetchAllUsers(): Promise<FirestoreUser[]> {
 export function subscribeToUsers(callback: (users: FirestoreUser[]) => void): Unsubscribe {
   const usersCol = collection(db, 'users');
   return onSnapshot(usersCol, (snap) => {
-    const usersList = snap.docs.map(d => {
-      const { password: _, ...rest } = d.data() as FirestoreUser;
-      return normalizeUserRecord({ ...rest, id: d.id } as FirestoreUser);
-    });
+    const usersList = snap.docs
+      .map(d => {
+        const { password: _, ...rest } = d.data() as FirestoreUser;
+        return normalizeUserRecord({ ...rest, id: d.id } as FirestoreUser);
+      })
+      .filter(u => u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
     callback(usersList);
   }, (error) => {
     handleFirestoreError(error, OperationType.LIST, 'users');
@@ -806,6 +859,17 @@ export async function createFirestoreTask(taskData: Partial<FirestoreTask>): Pro
     };
 
     const docRef = await addDoc(tasksCol, docData);
+
+    if (docData.assignedTo) {
+      await createNotification({
+        userId: docData.assignedTo,
+        title: 'New Task Assigned',
+        message: `You have been assigned a new task: "${docData.title}" by ${docData.creatorName || 'Admin'}.`,
+        type: 'TASK',
+        link: '/tasks'
+      }).catch(console.error);
+    }
+
     return { ...docData, id: docRef.id };
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'tasks');
@@ -816,6 +880,24 @@ export async function createFirestoreTask(taskData: Partial<FirestoreTask>): Pro
 export async function updateFirestoreTask(taskId: string, updates: Partial<FirestoreTask>): Promise<void> {
   try {
     const taskDocRef = doc(db, 'tasks', taskId);
+    
+    // Check if assignedTo has changed
+    if (updates.assignedTo) {
+      const snap = await getDoc(taskDocRef);
+      if (snap.exists()) {
+        const existingData = snap.data() as FirestoreTask;
+        if (existingData.assignedTo !== updates.assignedTo) {
+           await createNotification({
+             userId: updates.assignedTo,
+             title: 'Task Assigned',
+             message: `You have been assigned the task: "${updates.title || existingData.title}".`,
+             type: 'TASK',
+             link: '/tasks'
+           }).catch(console.error);
+        }
+      }
+    }
+
     await updateDoc(taskDocRef, {
       ...updates,
       updatedAt: new Date().toISOString(),
@@ -837,6 +919,14 @@ export async function submitTaskDeliverable(
 ): Promise<void> {
   try {
     const taskDocRef = doc(db, 'tasks', taskId);
+    
+    // Fetch task first to get details for the notification
+    const snap = await getDoc(taskDocRef);
+    if (!snap.exists()) {
+      throw new Error('Task not found');
+    }
+    const taskData = snap.data() as FirestoreTask;
+    
     const resolvedFiles = files && files.length > 0
       ? files
       : attachmentUrl
@@ -854,7 +944,19 @@ export async function submitTaskDeliverable(
       deliverableFiles: resolvedFiles,
       submittedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      progress: 100
     });
+    
+    // Notify the Admin/Creator
+    if (taskData.createdBy) {
+      await createNotification({
+        userId: taskData.createdBy,
+        title: 'Task Completed',
+        message: `${taskData.assignedUserName || 'A member'} has submitted the deliverable for task: "${taskData.title}".`,
+        type: 'TASK',
+        link: '/tasks'
+      }).catch(console.error);
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
     throw error;
@@ -1290,6 +1392,22 @@ export async function deleteFirestoreAnnouncement(annId: string): Promise<void> 
 // ----------------------------------------------------
 // NOTIFICATIONS SERVICE
 // ----------------------------------------------------
+export async function createNotification(data: Omit<FirestoreNotification, 'id' | 'createdAt' | 'read'>): Promise<FirestoreNotification> {
+  try {
+    const notifCol = collection(db, 'notifications');
+    const docData = {
+      ...data,
+      read: false,
+      createdAt: new Date().toISOString(),
+    };
+    const docRef = await addDoc(notifCol, docData);
+    return { ...docData, id: docRef.id } as FirestoreNotification;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'notifications');
+    throw error;
+  }
+}
+
 export function subscribeToUserNotifications(
   userId: string,
   callback: (notifications: FirestoreNotification[]) => void
@@ -1325,3 +1443,177 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
     handleFirestoreError(error, OperationType.UPDATE, 'notifications');
   }
 }
+
+// ----------------------------------------------------
+// SYSTEM SETTINGS & CONFIGURATION SERVICE
+// ----------------------------------------------------
+export interface FirestoreDepartmentConfig {
+  name: string;
+  code: string;
+  mentorName: string;
+  mentorId: string;
+  mentorEmail: string;
+  desc?: string;
+  color?: string;
+  badgeColor?: string;
+}
+
+export interface FirestoreSystemSettings {
+  id: string;
+  workspaceName: string;
+  workspaceTagline: string;
+  defaultPassword: string;
+  enforceFirstTimePasswordReset: boolean;
+  autoJoinDepartmentChat: boolean;
+  enforceTaskRoleAllotment: boolean;
+  requireDeliverableApproval: boolean;
+  systemBannerMessage: string;
+  systemBannerActive: boolean;
+  sessionTimeoutMinutes: number;
+  maintenanceMode: boolean;
+  departments: FirestoreDepartmentConfig[];
+  updatedAt?: string;
+  updatedBy?: string;
+  updatedByEmail?: string;
+}
+
+export const DEFAULT_SYSTEM_SETTINGS: FirestoreSystemSettings = {
+  id: 'system_config',
+  workspaceName: 'ForenClue Workspace',
+  workspaceTagline: 'Collaborative Forensic Intelligence & Digital Investigation Platform',
+  defaultPassword: 'Forenclue@2026',
+  enforceFirstTimePasswordReset: true,
+  autoJoinDepartmentChat: true,
+  enforceTaskRoleAllotment: true,
+  requireDeliverableApproval: true,
+  systemBannerMessage: 'System Operational: All forensic departments active and synchronized.',
+  systemBannerActive: false,
+  sessionTimeoutMinutes: 60,
+  maintenanceMode: false,
+  departments: [
+    { 
+      name: 'Creative & Graphics', 
+      desc: 'Visual evidence diagrams, case presentation layouts, UI design, infographics, and public communication assets.', 
+      code: 'CD', 
+      mentorName: 'Tejas Tapse',
+      mentorId: 'FC-EMP-2026-001',
+      mentorEmail: 'ttapse12@gmail.com',
+      color: 'bg-rose-600',
+      badgeColor: 'bg-rose-50 text-rose-700 border-rose-200'
+    },
+    { 
+      name: 'Case Study', 
+      desc: 'Deep-dive investigative case breakdowns, post-incident forensic reviews, methodology documentation, and landmark case files.', 
+      code: 'CS', 
+      mentorName: 'Ayush Gaikwad',
+      mentorId: 'FC-EMP-2026-003',
+      mentorEmail: 'ayush.gaikwad@forenclue.in',
+      color: 'bg-emerald-600',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    },
+    { 
+      name: 'Research', 
+      desc: 'Forensic sciences advancement, whitepapers, experimental evidence analysis, peer review workflows, and academic publications.', 
+      code: 'RS', 
+      mentorName: 'Purva Bhawsar',
+      mentorId: 'FC-EMP-2026-004',
+      mentorEmail: 'purva.bhawsar@forenclue.in',
+      color: 'bg-blue-600',
+      badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
+    },
+    { 
+      name: 'Events & Management', 
+      desc: 'Symposium logistics, community masterclasses, student workshop coordination, industry webinars, and partner outreach.', 
+      code: 'EW', 
+      mentorName: 'Mrunmayee Bodhe',
+      mentorId: 'FC-EMP-2026-002',
+      mentorEmail: 'mrunmayee.bodhe@forenclue.in',
+      color: 'bg-purple-600',
+      badgeColor: 'bg-purple-50 text-purple-700 border-purple-200'
+    },
+    { 
+      name: 'Cyber & Digital Forensics', 
+      desc: 'Disk image parsing, malware triage, volatile memory extraction, chain of custody logs, and OSINT digital footprinting.', 
+      code: 'CF', 
+      mentorName: 'Tejas Tapse',
+      mentorId: 'FC-EMP-2026-001',
+      mentorEmail: 'ttapse12@gmail.com',
+      color: 'bg-indigo-600',
+      badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+    },
+  ],
+  updatedAt: new Date().toISOString(),
+  updatedBy: 'Tejas Tapse (Super Admin)',
+  updatedByEmail: 'ttapse12@gmail.com'
+};
+
+export async function fetchSystemSettings(): Promise<FirestoreSystemSettings> {
+  try {
+    const configDocRef = doc(db, 'settings', 'system_config');
+    const snap = await getDoc(configDocRef);
+    if (snap.exists()) {
+      return { ...DEFAULT_SYSTEM_SETTINGS, ...(snap.data() as FirestoreSystemSettings), id: 'system_config' };
+    }
+    // Seed initial settings document if not yet present
+    await setDoc(configDocRef, DEFAULT_SYSTEM_SETTINGS);
+    return DEFAULT_SYSTEM_SETTINGS;
+  } catch (error) {
+    console.warn('Could not read system_config from Firestore, falling back to defaults:', error);
+    return DEFAULT_SYSTEM_SETTINGS;
+  }
+}
+
+export async function saveSystemSettings(
+  settings: Partial<FirestoreSystemSettings>,
+  savedBy?: { name?: string; email?: string }
+): Promise<FirestoreSystemSettings> {
+  try {
+    const configDocRef = doc(db, 'settings', 'system_config');
+    const existing = await fetchSystemSettings();
+    const updated: FirestoreSystemSettings = {
+      ...existing,
+      ...settings,
+      id: 'system_config',
+      updatedAt: new Date().toISOString(),
+      updatedBy: savedBy?.name || 'Super Admin',
+      updatedByEmail: savedBy?.email || 'ttapse12@gmail.com'
+    };
+
+    await setDoc(configDocRef, updated, { merge: true });
+    return updated;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, 'settings/system_config');
+    throw error;
+  }
+}
+
+export function subscribeToSystemSettings(callback: (settings: FirestoreSystemSettings) => void): Unsubscribe {
+  const configDocRef = doc(db, 'settings', 'system_config');
+  return onSnapshot(configDocRef, (snap) => {
+    if (snap.exists()) {
+      callback({ ...DEFAULT_SYSTEM_SETTINGS, ...(snap.data() as FirestoreSystemSettings), id: 'system_config' });
+    } else {
+      callback(DEFAULT_SYSTEM_SETTINGS);
+    }
+  }, (error) => {
+    console.warn('Realtime settings subscription fallback:', error);
+    callback(DEFAULT_SYSTEM_SETTINGS);
+  });
+}
+
+export async function updateUserBySuperAdmin(
+  userId: string,
+  updates: Partial<FirestoreUser>
+): Promise<void> {
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, {
+      ...updates,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
+    throw error;
+  }
+}
+
