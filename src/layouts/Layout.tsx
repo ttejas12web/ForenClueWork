@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Outlet, useLocation, Link } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { PwaInstallPrompt } from "../components/PwaInstallPrompt";
 import { useAuthStore } from "../store/authStore";
+import { subscribeToChatGroups, subscribeToAnnouncements } from "../lib/firestoreService";
 import { Home, MessageSquare, CheckSquare, Users, Settings, User } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -12,6 +13,56 @@ export const Layout = () => {
   const { user } = useAuthStore();
   const location = useLocation();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  // Push notifications listener for new messages & announcements
+  const seenGroupsRef = useRef<Record<string, string>>({});
+  const seenAnnsRef = useRef<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!user) return;
+
+    let isInitChat = true;
+    let isInitAnn = true;
+
+    const unsubChat = subscribeToChatGroups(String(user.id), (groups) => {
+      groups.forEach(group => {
+        const lastMsg = group.lastMessage;
+        if (lastMsg && lastMsg.createdAt) {
+          const prevTime = seenGroupsRef.current[group.id];
+          if (!isInitChat && prevTime && prevTime !== lastMsg.createdAt) {
+            if (lastMsg.senderId !== String(user.id) && Notification.permission === 'granted') {
+              new Notification(`New message in ${group.name || 'Chat'}`, {
+                body: `${lastMsg.senderName}: ${lastMsg.content}`,
+                icon: '/app-icon.png'
+              });
+            }
+          }
+          seenGroupsRef.current[group.id] = lastMsg.createdAt;
+        }
+      });
+      isInitChat = false;
+    });
+
+    const unsubAnn = subscribeToAnnouncements((anns) => {
+      anns.forEach(ann => {
+        if (!isInitAnn && !seenAnnsRef.current[ann.id]) {
+          if (ann.authorId !== String(user.id) && Notification.permission === 'granted') {
+            new Notification(`Announcement: ${ann.title}`, {
+              body: ann.content,
+              icon: '/app-icon.png'
+            });
+          }
+        }
+        seenAnnsRef.current[ann.id] = true;
+      });
+      isInitAnn = false;
+    });
+
+    return () => {
+      unsubChat();
+      unsubAnn();
+    };
+  }, [user]);
 
   // Bottom Nav items for mobile quick switching
   const mobileNavItems = [

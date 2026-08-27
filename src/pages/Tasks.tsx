@@ -39,6 +39,7 @@ import {
   updateFirestoreTask,
   deleteFirestoreTask,
   submitTaskDeliverable,
+  uploadTaskAttachment,
   FirestoreTask,
   FirestoreUser
 } from '../lib/firestoreService';
@@ -156,6 +157,8 @@ export const Tasks: React.FC = () => {
   const [taskAssignedTo, setTaskAssignedTo] = useState<string>('');
   const [taskNotes, setTaskNotes] = useState('');
   const [memberSearchInModal, setMemberSearchInModal] = useState('');
+  const [taskReferenceFile, setTaskReferenceFile] = useState<File | null>(null);
+  const [taskReferenceFileInfo, setTaskReferenceFileInfo] = useState<{name: string, url: string, type: string} | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
     setNotificationToast({ show: true, msg, type });
@@ -213,6 +216,8 @@ export const Tasks: React.FC = () => {
     setTaskAssignedTo(associatedMembers.length > 0 ? String(associatedMembers[0].id) : '');
     setTaskNotes('');
     setMemberSearchInModal('');
+    setTaskReferenceFile(null);
+    setTaskReferenceFileInfo(null);
     setShowAllotModal(true);
   };
 
@@ -228,6 +233,12 @@ export const Tasks: React.FC = () => {
     setTaskAssignedTo(task.assignedTo ? String(task.assignedTo) : '');
     setTaskNotes(task.notes || '');
     setMemberSearchInModal('');
+    setTaskReferenceFile(null);
+    setTaskReferenceFileInfo(task.referenceAttachmentUrl ? {
+      url: task.referenceAttachmentUrl,
+      name: task.referenceAttachmentName || 'Attachment',
+      type: task.referenceAttachmentType || 'file'
+    } : null);
     setShowAllotModal(true);
   };
 
@@ -267,6 +278,13 @@ export const Tasks: React.FC = () => {
         assignedUserRole: assignedUser?.role,
         notes: taskNotes.trim(),
       };
+
+      if (taskReferenceFile) {
+        const uploadRes = await uploadTaskAttachment(taskReferenceFile);
+        payload.referenceAttachmentUrl = uploadRes.url;
+        payload.referenceAttachmentName = uploadRes.name;
+        payload.referenceAttachmentType = uploadRes.type;
+      }
 
       if (editingTask) {
         await updateFirestoreTask(editingTask.id, payload);
@@ -738,6 +756,26 @@ export const Tasks: React.FC = () => {
                     {task.description || 'No additional details provided.'}
                   </p>
 
+                  {/* Reference Attachment Preview */}
+                  {task.referenceAttachmentUrl && (
+                    <div className="mt-2.5">
+                      <a
+                        href={task.referenceAttachmentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center space-x-1.5 px-3 py-2 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-xl text-blue-700 hover:text-blue-800 transition-colors cursor-pointer w-full max-w-xs overflow-hidden group"
+                      >
+                        <div className="h-6 w-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                          <Paperclip className="h-3 w-3" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-bold truncate">Reference Material</p>
+                          <p className="text-[10px] font-medium text-blue-500/80 truncate">{task.referenceAttachmentName || 'Attached Document'}</p>
+                        </div>
+                      </a>
+                    </div>
+                  )}
+
                   {/* Member Allotment Badge */}
                   <div className="mt-3.5 p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
                     <div className="flex items-center space-x-2 min-w-0">
@@ -1135,6 +1173,48 @@ export const Tasks: React.FC = () => {
                   placeholder="e.g. Aug 30, 2026 or Within 48 Hours"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
+              </div>
+
+              {/* Reference Attachment */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Attach Reference Document/Image (Optional)</label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="file"
+                    id="reference-upload"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setTaskReferenceFile(e.target.files[0]);
+                      }
+                    }}
+                  />
+                  <label 
+                    htmlFor="reference-upload"
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl text-xs font-medium cursor-pointer transition flex items-center space-x-2"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                    <span>Choose File</span>
+                  </label>
+                  {(taskReferenceFile || taskReferenceFileInfo) && (
+                    <div className="flex items-center space-x-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-100 flex-1 min-w-0">
+                      <Paperclip className="h-3 w-3 shrink-0" />
+                      <span className="text-[11px] font-medium truncate">
+                        {taskReferenceFile ? taskReferenceFile.name : taskReferenceFileInfo?.name}
+                      </span>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setTaskReferenceFile(null);
+                          setTaskReferenceFileInfo(null);
+                        }} 
+                        className="text-blue-400 hover:text-blue-700 shrink-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="pt-4 border-t border-slate-200 flex items-center justify-end space-x-2">

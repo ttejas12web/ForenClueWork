@@ -66,6 +66,9 @@ export interface FirestoreTask {
   deliverableAttachmentUrl?: string | null;
   deliverableAttachmentName?: string | null;
   deliverableAttachmentType?: string | null;
+  referenceAttachmentUrl?: string | null;
+  referenceAttachmentName?: string | null;
+  referenceAttachmentType?: string | null;
   deliverableFiles?: Array<{
     name: string;
     url: string;
@@ -265,74 +268,6 @@ export const SEED_USERS: FirestoreUser[] = [
     designation: 'Creative Media & Graphic Designer Volunteer',
     phone: '+91 98765 43203',
     bio: 'Digital case infographics, UI/UX presentation, and creative media asset design.',
-    isDefaultPassword: true,
-    tempPasswordChanged: false,
-    active: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_emp_006',
-    forenclueId: 'FC-EMP-2026-006',
-    name: 'Rohan Joshi',
-    email: 'rohan.joshi@forenclue.in',
-    password: 'Forenclue@2026',
-    role: 'EMPLOYEE',
-    department: 'Case Study',
-    designation: 'Case Analysis Specialist',
-    phone: '+91 98765 43215',
-    bio: 'Forensic case timeline reconstruction and investigation post-mortems.',
-    isDefaultPassword: true,
-    tempPasswordChanged: false,
-    active: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_emp_007',
-    forenclueId: 'FC-EMP-2026-007',
-    name: 'Sneha Patil',
-    email: 'sneha.patil@forenclue.in',
-    password: 'Forenclue@2026',
-    role: 'EMPLOYEE',
-    department: 'Research',
-    designation: 'Research Associate',
-    phone: '+91 98765 43216',
-    bio: 'Scientific literature review and laboratory evidence validation.',
-    isDefaultPassword: true,
-    tempPasswordChanged: false,
-    active: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_emp_008',
-    forenclueId: 'FC-EMP-2026-008',
-    name: 'Aditya Kulkarni',
-    email: 'aditya.kulkarni@forenclue.in',
-    password: 'Forenclue@2026',
-    role: 'EMPLOYEE',
-    department: 'Events & Management',
-    designation: 'Community & Webinar Coordinator',
-    phone: '+91 98765 43217',
-    bio: 'Webinar logistics, forensic masterclasses, and workshop organization.',
-    isDefaultPassword: true,
-    tempPasswordChanged: false,
-    active: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_emp_009',
-    forenclueId: 'FC-EMP-2026-009',
-    name: 'Siddharth Verma',
-    email: 'siddharth.verma@forenclue.in',
-    password: 'Forenclue@2026',
-    role: 'EMPLOYEE',
-    department: 'Cyber & Digital Forensics',
-    designation: 'Digital Forensics Analyst',
-    phone: '+91 98765 43218',
-    bio: 'Disk imaging, volatile RAM analysis, and evidence preservation.',
     isDefaultPassword: true,
     tempPasswordChanged: false,
     active: true,
@@ -1232,6 +1167,32 @@ export async function sendFirestoreMessage(
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `chat_groups/${groupId}/messages`);
     throw error;
+  }
+}
+
+export async function uploadTaskAttachment(file: File): Promise<{ url: string; name: string; type: string }> {
+  try {
+    const storageRef = ref(storage, `task_attachments/${Date.now()}_${file.name}`);
+    const snapshot = await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(snapshot.ref);
+    return {
+      url,
+      name: file.name,
+      type: file.type.startsWith('image/') ? 'image' : 'file',
+    };
+  } catch (error) {
+    console.warn('Storage upload fallback:', error);
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        resolve({
+          url: reader.result as string,
+          name: file.name,
+          type: file.type.startsWith('image/') ? 'image' : 'file',
+        });
+      };
+      reader.readAsDataURL(file);
+    });
   }
 }
 
