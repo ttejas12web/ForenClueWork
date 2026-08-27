@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
+import { registerServiceWorker, subscribeToPushNotifications, isPushNotificationSupported } from './lib/pushNotifications';
 import { Login } from './pages/Login';
 import { ForcePasswordChange } from './pages/ForcePasswordChange';
 import { Dashboard } from './pages/Dashboard';
@@ -31,11 +32,24 @@ function ProtectedRoute({ requirePasswordChange = false }) {
 }
 
 export default function App() {
-  const { initialize, loading } = useAuthStore();
+  const { user, initialize, loading } = useAuthStore();
 
   useEffect(() => {
     initialize();
+    registerServiceWorker();
   }, [initialize]);
+
+  // If user is authenticated and notification permission is granted, sync push subscription
+  useEffect(() => {
+    if (user && isPushNotificationSupported() && Notification.permission === 'granted') {
+      subscribeToPushNotifications({
+        id: user.id,
+        forenclueId: user.forenclueId,
+        role: user.role,
+        department: user.department
+      }).catch(console.warn);
+    }
+  }, [user]);
 
   if (loading) {
     return (

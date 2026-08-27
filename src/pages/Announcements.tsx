@@ -1,68 +1,73 @@
 import React, { useState, useEffect } from 'react';
-import { Megaphone, Plus, Calendar, Shield, X, AlertCircle } from 'lucide-react';
+import { Megaphone, Plus, Calendar, Shield, X, AlertCircle, Radio } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-
-interface AnnouncementItem {
-  id: number;
-  title: string;
-  content: string;
-  date: string;
-  author: string;
-  priority: string;
-}
+import { 
+  subscribeToAnnouncements, 
+  createFirestoreAnnouncement, 
+  deleteFirestoreAnnouncement, 
+  type FirestoreAnnouncement 
+} from '../lib/firestoreService';
 
 export const Announcements = () => {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'SUPER_ADMIN';
 
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>(() => {
-    const saved = localStorage.getItem('forenclue_workspace_announcements');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // fallback
-      }
-    }
-    return [];
-  });
+  const [announcements, setAnnouncements] = useState<FirestoreAnnouncement[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [showModal, setShowModal] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [priority, setPriority] = useState('NORMAL');
+  const [priority, setPriority] = useState<'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
   const [error, setError] = useState('');
+  const [posting, setPosting] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('forenclue_workspace_announcements', JSON.stringify(announcements));
-  }, [announcements]);
+    const unsub = subscribeToAnnouncements((data) => {
+      setAnnouncements(data);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
 
-  const handlePostNotice = (e: React.FormEvent) => {
+  const handlePostNotice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) {
       setError('Please fill in all announcement fields');
       return;
     }
 
-    const newAnn: AnnouncementItem = {
-      id: Date.now(),
-      title: title.trim(),
-      content: content.trim(),
-      date: new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }),
-      author: user?.name || 'Super Administrator',
-      priority: priority
-    };
-
-    setAnnouncements([newAnn, ...announcements]);
-    setTitle('');
-    setContent('');
+    setPosting(true);
     setError('');
-    setShowModal(false);
+
+    try {
+      await createFirestoreAnnouncement({
+        title: title.trim(),
+        content: content.trim(),
+        author: user?.name || 'Super Administrator',
+        authorId: user?.id ? String(user.id) : '',
+        priority: priority
+      });
+
+      setTitle('');
+      setContent('');
+      setError('');
+      setShowModal(false);
+    } catch (err: any) {
+      console.error('Error posting announcement:', err);
+      setError(err?.message || 'Failed to publish announcement.');
+    } finally {
+      setPosting(false);
+    }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Delete this workspace announcement?')) {
-      setAnnouncements(announcements.filter(a => a.id !== id));
+      try {
+        await deleteFirestoreAnnouncement(id);
+      } catch (err) {
+        console.error('Failed to delete announcement:', err);
+      }
     }
   };
 
@@ -222,9 +227,11 @@ export const Announcements = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm"
+                  disabled={posting}
+                  className="flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
                 >
-                  Publish Notice
+                  <Radio className="h-3.5 w-3.5" />
+                  <span>{posting ? 'Publishing & Broadcasting...' : 'Publish & Broadcast Push Alert'}</span>
                 </button>
               </div>
             </form>

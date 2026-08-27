@@ -3,10 +3,11 @@ import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createServer as createViteServer } from 'vite';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import webpush from 'web-push';
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -44,6 +45,203 @@ app.use(express.json({ limit: '10mb' }));
 // Health check endpoint
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ----------------------------------------------------
+// WEB PUSH & BACKGROUND NOTIFICATIONS
+// ----------------------------------------------------
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || 'BD6x0QDTjiEXrGNy1exUxz3JEL1-LbNRNu4WTxdeAqjNG59QnJef-hMTRHNdxjQ8d_tGoOmeUmqsFIMzrkz3jpk';
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || 'gY-P9gPCWVPBn6Wzh2OL09Ns1p33Jw6gNkWSZfyVWNc';
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:contact@forenclue.in';
+
+try {
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+} catch (error) {
+  console.error('VAPID setup warning:', error);
+}
+
+interface PushSubscriptionRecord {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  userId?: string;
+  forenclueId?: string;
+  role?: string;
+  department?: string;
+  userAgent?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const pushSubscriptions = new Map<string, PushSubscriptionRecord>();
+
+// Public key endpoint for client PWA subscription
+app.get('/api/push/vapid-public-key', (_req, res) => {
+  res.json({ publicKey: vapidPublicKey });
+});
+
+// Register or update a device/browser push subscription
+app.post('/api/push/subscribe', (req, res) => {
+  try {
+    const { subscription, userId, forenclueId, role, department, userAgent } = req.body;
+    if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
+      res.status(400).json({ error: 'A valid PushSubscription object with keys is required.' });
+      return;
+    }
+
+    const endpoint = subscription.endpoint;
+    const now = new Date().toISOString();
+    const existing = pushSubscriptions.get(endpoint);
+
+    pushSubscriptions.set(endpoint, {
+      endpoint,
+      keys: subscription.keys,
+      userId: userId ? String(userId) : existing?.userId,
+      forenclueId: forenclueId || existing?.forenclueId,
+      role: role || existing?.role,
+      department: department || existing?.department,
+      userAgent: userAgent || existing?.userAgent,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now
+    });
+
+    res.status(200).json({ success: true, count: pushSubscriptions.size });
+  } catch (error) {
+    console.error('Error registering push subscription:', error);
+    res.status(500).json({ error: 'Failed to register push subscription.' });
+  }
+});
+
+// Unsubscribe an endpoint
+app.post('/api/push/unsubscribe', (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (endpoint && pushSubscriptions.has(endpoint)) {
+      pushSubscriptions.delete(endpoint);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to unsubscribe.' });
+  }
+});
+
+// Test background push notification
+app.post('/api/push/test', async (req, res) => {
+  try {
+    const { userId, title, body } = req.body;
+    const targetPayload = JSON.stringify({
+      title: title || 'ForenClue Background Alert',
+      body: body || 'Background push notifications are working perfectly! You will receive real-time task allotments, chat alerts, and announcements on your Home Screen.',
+      icon: '/app-icon-192.png',
+      badge: '/favicon.png',
+      url: '/profile',
+      tag: `test-push-${Date.now()}`,
+      data: { url: '/profile' }
+    });
+
+    let targets = Array.from(pushSubscriptions.values());
+    if (userId) {
+      const userMatches = targets.filter(s => s.userId === String(userId));
+      if (userMatches.length > 0) {
+        targets = userMatches;
+      }
+    }
+
+    if (targets.length === 0) {
+      res.status(404).json({ error: 'No active push subscriptions found on this device. Please enable notifications first.' });
+      return;
+    }
+
+    let sent = 0;
+    let failed = 0;
+
+    await Promise.allSettled(
+      targets.map(async (sub) => {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: sub.endpoint,
+              keys: sub.keys
+            },
+            targetPayload
+          );
+          sent++;
+        } catch (err: any) {
+          failed++;
+          if (err.statusCode === 404 || err.statusCode === 410) {
+            pushSubscriptions.delete(sub.endpoint);
+          }
+        }
+      })
+    );
+
+    res.json({ success: true, message: `Notification dispatched to ${sent} active device(s).`, sent, failed });
+  } catch (error: any) {
+    console.error('Error sending test push notification:', error);
+    res.status(500).json({ error: error?.message || 'Failed to send test push notification.' });
+  }
+});
+
+// Broadcast or target push notification to members
+app.post('/api/push/send', async (req, res) => {
+  try {
+    const { userId, title, body, icon, badge, url, tag, data } = req.body;
+    
+    if (!title) {
+      res.status(400).json({ error: 'Notification title is required.' });
+      return;
+    }
+
+    const payload = JSON.stringify({
+      title: title || 'ForenClue Notification',
+      body: body || 'You have an update in your workspace.',
+      icon: icon || '/app-icon-192.png',
+      badge: badge || '/favicon.png',
+      url: url || '/',
+      tag: tag || `forenclue-${Date.now()}`,
+      data: { url: url || '/', ...data }
+    });
+
+    let targets = Array.from(pushSubscriptions.values());
+    if (userId && userId !== 'ALL') {
+      targets = targets.filter(s => s.userId === String(userId));
+    }
+
+    if (targets.length === 0) {
+      res.json({ success: true, sent: 0, message: 'No registered push devices for target.' });
+      return;
+    }
+
+    let sent = 0;
+    let failed = 0;
+
+    await Promise.allSettled(
+      targets.map(async (sub) => {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: sub.endpoint,
+              keys: sub.keys
+            },
+            payload
+          );
+          sent++;
+        } catch (err: any) {
+          failed++;
+          if (err.statusCode === 404 || err.statusCode === 410) {
+            pushSubscriptions.delete(sub.endpoint);
+          }
+        }
+      })
+    );
+
+    res.json({ success: true, sent, failed, total: targets.length });
+  } catch (error: any) {
+    console.error('Error dispatching push notifications:', error);
+    res.status(500).json({ error: error?.message || 'Failed to dispatch push notifications.' });
+  }
 });
 
 interface StoredLocalFile {

@@ -32,9 +32,18 @@ import {
   Bell,
   BellRing,
   Activity,
-  Layers
+  Layers,
+  Smartphone,
+  Radio,
+  RefreshCw
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+import { 
+  isPushNotificationSupported, 
+  subscribeToPushNotifications, 
+  sendTestPushNotification, 
+  getExistingPushSubscription 
+} from '../lib/pushNotifications';
 
 interface TaskItem {
   id: number;
@@ -117,33 +126,93 @@ export const Profile = () => {
   const [myTasks, setMyTasks] = useState<TaskItem[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
 
+  // Background Push Notifications State
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default');
+  const [pushRegistered, setPushRegistered] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushMessage, setPushMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    if ('Notification' in window) {
+    async function initPushStatus() {
+      if (!isPushNotificationSupported()) {
+        setNotificationPermission('unsupported');
+        return;
+      }
       setNotificationPermission(Notification.permission);
-    } else {
-      setNotificationPermission('unsupported');
+      if (Notification.permission === 'granted') {
+        const sub = await getExistingPushSubscription();
+        if (sub) {
+          setPushRegistered(true);
+        }
+      }
     }
+    initPushStatus();
   }, []);
 
-  const requestNotificationPermission = async () => {
-    if (!('Notification' in window)) {
-      setNotificationPermission('unsupported');
-      return;
-    }
-    
+  const handleEnablePush = async () => {
+    setPushLoading(true);
+    setPushMessage(null);
     try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-      if (permission === 'granted') {
-        new Notification('Notifications Enabled', {
-          body: 'You will now receive alerts for tasks and updates.',
-          icon: '/favicon.ico'
+      const res = await subscribeToPushNotifications({
+        id: user?.id,
+        forenclueId: user?.forenclueId,
+        role: user?.role,
+        department: user?.department
+      });
+
+      if (res.success) {
+        setNotificationPermission('granted');
+        setPushRegistered(true);
+        setPushMessage({
+          type: 'success',
+          text: 'Background push notifications are active! You will receive alerts on your Home Screen even when closed.'
+        });
+      } else {
+        if (Notification.permission === 'denied') {
+          setNotificationPermission('denied');
+        }
+        setPushMessage({
+          type: 'error',
+          text: res.error || 'Failed to activate push notifications.'
         });
       }
-    } catch (error) {
-      console.error('Error requesting notification permission:', error);
+    } catch (err: any) {
+      setPushMessage({
+        type: 'error',
+        text: err?.message || 'Error configuring background notifications.'
+      });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setPushLoading(true);
+    setPushMessage(null);
+    try {
+      const res = await sendTestPushNotification(
+        user?.id,
+        'ForenClue Background Alert',
+        'Your background push notifications are functioning properly! Task allotments and announcements will reach your Home Screen.'
+      );
+      if (res.success) {
+        setPushMessage({
+          type: 'success',
+          text: 'Test background notification sent! Check your notification tray or Home Screen.'
+        });
+      } else {
+        setPushMessage({
+          type: 'error',
+          text: res.message || 'Could not send test push notification.'
+        });
+      }
+    } catch (err: any) {
+      setPushMessage({
+        type: 'error',
+        text: err?.message || 'Error dispatching test notification.'
+      });
+    } finally {
+      setPushLoading(false);
     }
   };
 
@@ -929,45 +998,110 @@ export const Profile = () => {
               Workspace Settings
             </h3>
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 text-xs">
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="font-bold text-slate-900 flex items-center space-x-1.5">
-                    <Bell className="h-4 w-4 text-blue-600" />
-                    <span>Push Notifications</span>
+                    <BellRing className="h-4 w-4 text-blue-600" />
+                    <span>Background Push Notifications</span>
                   </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Receive alerts for tasks</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                    Receive task allotments, team messages, and announcements directly on your device Home Screen and lockscreen even when the app is closed.
+                  </p>
                 </div>
-                {notificationPermission === 'unsupported' ? (
-                  <span className="px-2.5 py-1 bg-slate-100 text-slate-600 font-bold rounded-lg text-[10px]">
-                    Unsupported
-                  </span>
-                ) : notificationPermission === 'granted' ? (
-                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-[10px] flex items-center space-x-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    <span>Enabled</span>
-                  </span>
-                ) : notificationPermission === 'denied' ? (
-                  <span className="px-2.5 py-1 bg-rose-100 text-rose-700 font-bold rounded-lg text-[10px]">
-                    Blocked
-                  </span>
+                <div className="flex-shrink-0">
+                  {notificationPermission === 'unsupported' ? (
+                    <span className="px-2.5 py-1 bg-slate-100 text-slate-600 font-bold rounded-lg text-[10px]">
+                      Unsupported
+                    </span>
+                  ) : notificationPermission === 'granted' && pushRegistered ? (
+                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-[10px] flex items-center space-x-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Active</span>
+                    </span>
+                  ) : notificationPermission === 'granted' ? (
+                    <span className="px-2.5 py-1 bg-blue-100 text-blue-700 font-bold rounded-lg text-[10px] flex items-center space-x-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>Permission Granted</span>
+                    </span>
+                  ) : notificationPermission === 'denied' ? (
+                    <span className="px-2.5 py-1 bg-rose-100 text-rose-700 font-bold rounded-lg text-[10px]">
+                      Blocked
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 bg-amber-100 text-amber-700 font-bold rounded-lg text-[10px]">
+                      Not Configured
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {pushMessage && (
+                <div className={`p-3 rounded-xl text-xs flex items-center space-x-2 ${
+                  pushMessage.type === 'success' 
+                    ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' 
+                    : 'bg-rose-50 text-rose-900 border border-rose-200'
+                }`}>
+                  {pushMessage.type === 'success' ? (
+                    <Check className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-rose-600 flex-shrink-0" />
+                  )}
+                  <span>{pushMessage.text}</span>
+                </div>
+              )}
+
+              <div className="pt-2 flex flex-wrap items-center gap-2">
+                {notificationPermission !== 'granted' || !pushRegistered ? (
+                  <button
+                    type="button"
+                    onClick={handleEnablePush}
+                    disabled={pushLoading || notificationPermission === 'denied' || notificationPermission === 'unsupported'}
+                    className="flex items-center space-x-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl transition-all cursor-pointer shadow-sm"
+                  >
+                    <Smartphone className="h-4 w-4" />
+                    <span>{pushLoading ? 'Configuring...' : 'Enable Background Push'}</span>
+                  </button>
                 ) : (
                   <button
-                    onClick={requestNotificationPermission}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors cursor-pointer"
+                    type="button"
+                    onClick={handleTestPush}
+                    disabled={pushLoading}
+                    className="flex items-center space-x-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold rounded-xl transition-all cursor-pointer shadow-sm"
                   >
-                    Enable
+                    <Radio className="h-4 w-4 text-emerald-400" />
+                    <span>{pushLoading ? 'Sending...' : 'Send Test Notification'}</span>
+                  </button>
+                )}
+
+                {notificationPermission === 'granted' && !pushRegistered && (
+                  <button
+                    type="button"
+                    onClick={handleEnablePush}
+                    disabled={pushLoading}
+                    className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-all cursor-pointer"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${pushLoading ? 'animate-spin' : ''}`} />
+                    <span>Sync Push Device</span>
                   </button>
                 )}
               </div>
+
               {notificationPermission === 'denied' && (
-                <p className="text-[10px] text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100 mt-2">
-                  You have blocked notifications. Please check your browser settings to allow them.
+                <p className="text-[10px] text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-100 leading-relaxed">
+                  Notifications are blocked in your browser or device permissions. To enable background push, tap the lock/settings icon in your browser address bar and set Notifications to Allow.
                 </p>
               )}
+
               {notificationPermission === 'unsupported' && (
-                <p className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 mt-2 leading-relaxed">
-                  Push notifications are not natively supported in your current browser session. On iOS, you must add this app to your Home Screen (Share &gt; Add to Home Screen) to enable notifications.
-                </p>
+                <div className="text-[11px] text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5">
+                  <p className="font-semibold text-slate-900 flex items-center space-x-1">
+                    <Smartphone className="h-3.5 w-3.5 text-blue-600" />
+                    <span>Enabling Push on iOS (iPhone/iPad):</span>
+                  </p>
+                  <p className="text-slate-600 leading-relaxed">
+                    Apple iOS 16.4+ requires Web Push apps to be added to the Home Screen. Tap Safari's <strong>Share</strong> button, select <strong>"Add to Home Screen"</strong>, then launch ForenClue from your Home Screen to activate background notifications.
+                  </p>
+                </div>
               )}
             </div>
           </div>

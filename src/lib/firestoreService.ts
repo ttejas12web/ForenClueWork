@@ -22,6 +22,7 @@ import {
 } from 'firebase/storage';
 import bcrypt from 'bcryptjs';
 import { db, storage, handleFirestoreError, OperationType } from './firebase';
+import { dispatchBackgroundPush } from './pushNotifications';
 
 export interface FirestoreUser {
   id: string;
@@ -1161,6 +1162,23 @@ export async function sendFirestoreMessage(
         lastMessageAt: messageData.createdAt,
         updatedAt: messageData.createdAt,
       });
+
+      // Dispatch background push notifications to recipient members
+      if (groupData?.memberIds && groupData.memberIds.length > 0) {
+        const otherMembers = groupData.memberIds.filter(id => id !== senderId);
+        const alertTitle = groupData.type === 'DIRECT' ? senderName : `${groupData.name || 'Chat'}: ${senderName}`;
+        const alertBody = isE2EE ? 'New encrypted message' : (finalContent || (attachment ? `📎 ${attachment.name}` : 'Sent a message'));
+        
+        for (const recipientId of otherMembers) {
+          dispatchBackgroundPush({
+            userId: recipientId,
+            title: alertTitle,
+            body: alertBody,
+            url: '/chat',
+            tag: `chat-${groupId}`
+          }).catch(err => console.warn('Background push dispatch for chat message failed:', err));
+        }
+      }
     }
 
     return { ...messageData, content: (content || '').trim(), id: docRef.id };
@@ -1334,6 +1352,16 @@ export async function createFirestoreAnnouncement(data: Partial<FirestoreAnnounc
     };
 
     const docRef = await addDoc(annCol, docData);
+
+    // Asynchronously dispatch background Web Push to all registered devices
+    dispatchBackgroundPush({
+      userId: 'ALL',
+      title: `Announcement: ${docData.title}`,
+      body: docData.content,
+      url: '/announcements',
+      tag: `ann-${docRef.id}`
+    }).catch(err => console.warn('Background push dispatch for announcement failed:', err));
+
     return { ...docData, id: docRef.id };
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'announcements');
@@ -1362,6 +1390,16 @@ export async function createNotification(data: Omit<FirestoreNotification, 'id' 
       createdAt: new Date().toISOString(),
     };
     const docRef = await addDoc(notifCol, docData);
+
+    // Asynchronously dispatch background Web Push to target user's device/PWA
+    dispatchBackgroundPush({
+      userId: docData.userId,
+      title: docData.title,
+      body: docData.message,
+      url: docData.link || '/tasks',
+      tag: `notif-${docRef.id}`
+    }).catch(err => console.warn('Background push dispatch for notification failed:', err));
+
     return { ...docData, id: docRef.id } as FirestoreNotification;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'notifications');

@@ -60,6 +60,9 @@ export interface WorkspaceTask {
   dueDate: string | null;
   createdBy: any;
   notes: string | null;
+  referenceAttachmentUrl?: string | null;
+  referenceAttachmentName?: string | null;
+  referenceAttachmentType?: string | null;
   deliverableNotes?: string | null;
   deliverableLink?: string | null;
   deliverableAttachmentUrl?: string | null;
