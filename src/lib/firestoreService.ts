@@ -1444,6 +1444,42 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
 }
 
 // ----------------------------------------------------
+// PUSH SUBSCRIPTION STORAGE (CROSS-PLATFORM PWA)
+// ----------------------------------------------------
+export async function saveFirestorePushSubscription(subscription: any, userInfo?: any): Promise<void> {
+  try {
+    if (!subscription || !subscription.endpoint) return;
+    const pushCol = collection(db, 'push_subscriptions');
+    const endpoint = subscription.endpoint;
+    // Create a deterministic safe doc ID from endpoint
+    const safeDocId = btoa(endpoint).replace(/[/+=]/g, '_').slice(-60);
+    const subDoc = doc(pushCol, safeDocId);
+    await setDoc(subDoc, {
+      endpoint,
+      keys: subscription.keys || {},
+      userId: userInfo?.id ? String(userInfo.id) : '',
+      forenclueId: userInfo?.forenclueId || '',
+      role: userInfo?.role || '',
+      department: userInfo?.department || '',
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Firestore push subscription sync warning:', err);
+  }
+}
+
+export async function removeFirestorePushSubscription(endpoint: string): Promise<void> {
+  try {
+    if (!endpoint) return;
+    const safeDocId = btoa(endpoint).replace(/[/+=]/g, '_').slice(-60);
+    await deleteDoc(doc(db, 'push_subscriptions', safeDocId));
+  } catch (err) {
+    console.warn('Firestore push subscription removal warning:', err);
+  }
+}
+
+// ----------------------------------------------------
 // SYSTEM SETTINGS & CONFIGURATION SERVICE
 // ----------------------------------------------------
 export interface FirestoreDepartmentConfig {

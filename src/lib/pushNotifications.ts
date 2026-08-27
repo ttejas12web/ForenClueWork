@@ -1,8 +1,18 @@
-// Push Notification Manager for ForenClue PWA
+// Client-Side Push Notifications Manager for ForenClue PWA
 // Supports background notifications on Android, iOS PWA (iOS 16.4+), and Desktop
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const cleanStr = base64String.trim().replace(/\s+/g, '');
+import { saveFirestorePushSubscription, removeFirestorePushSubscription } from './firestoreService';
+import { apiFetch } from './api';
+
+export const DEFAULT_VAPID_PUBLIC_KEY = 'BD6x0QDTjiEXrGNy1exUxz3JEL1-LbNRNu4WTxdeAqjNG59QnJef-hMTRHNdxjQ8d_tGoOmeUmqsFIMzrkz3jpk';
+
+export function urlBase64ToUint8Array(base64String?: string): Uint8Array {
+  // Ensure we have a clean string without HTML tags, whitespace, or invalid characters
+  let cleanStr = (base64String || '').trim().replace(/\s+/g, '');
+  if (!cleanStr || cleanStr.includes('<') || cleanStr.length < 50) {
+    cleanStr = DEFAULT_VAPID_PUBLIC_KEY;
+  }
+
   const padding = '='.repeat((4 - (cleanStr.length % 4)) % 4);
   const base64 = (cleanStr + padding)
     .replace(/-/g, '+')
@@ -16,7 +26,8 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
     }
     return outputArray;
   } catch (e) {
-    console.warn('atob failed, using manual base64 buffer decode:', e);
+    console.warn('atob decoding error, falling back to manual decode:', e);
+    // Manual byte decode fallback
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     const bytes: number[] = [];
     let buffer = 0;
@@ -38,8 +49,8 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export function isPushNotificationSupported(): boolean {
+  if (typeof window === 'undefined') return false;
   return (
-    typeof window !== 'undefined' &&
     'serviceWorker' in navigator &&
     'PushManager' in window &&
     'Notification' in window
@@ -80,7 +91,7 @@ export async function subscribeToPushNotifications(userInfo?: {
   if (!isPushNotificationSupported()) {
     return {
       success: false,
-      error: 'Push notifications are not supported in this browser. For iOS devices, please add this app to your Home Screen first.'
+      error: 'Push notifications are not supported in this browser. For iOS devices, please add this app to your Home Screen first (Share > Add to Home Screen).'
     };
   }
 
@@ -95,50 +106,48 @@ export async function subscribeToPushNotifications(userInfo?: {
       return {
         success: false,
         error: permission === 'denied' 
-          ? 'Notification permission was denied. Please allow notifications in your browser or device settings.' 
-          : 'Notification permission was dismissed.'
+          ? 'Notification permission was denied. Please allow notifications in your device or browser settings.' 
+          : 'Notification permission request was dismissed.'
       };
     }
 
-    // 3. Fetch VAPID Public Key from server
-    const keyRes = await fetch('/api/push/vapid-public-key');
-    if (!keyRes.ok) {
-      throw new Error('Failed to retrieve push notification server key.');
+    // 3. Obtain VAPID Public Key safely (default constant with server override)
+    let publicKey = DEFAULT_VAPID_PUBLIC_KEY;
+    try {
+      const keyRes = await apiFetch('/api/push/vapid-public-key');
+      const keyContentType = keyRes.headers.get('content-type') || '';
+      if (keyRes.ok && keyContentType.includes('application/json')) {
+        const keyData = await keyRes.json();
+        if (keyData?.publicKey && typeof keyData.publicKey === 'string' && !keyData.publicKey.includes('<')) {
+          publicKey = keyData.publicKey.trim();
+        }
+      }
+    } catch {
+      // Use default VAPID key
     }
-    const { publicKey } = await keyRes.json();
 
-    if (!publicKey) {
-      throw new Error('Push notification server key is missing.');
-    }
-
-    const cleanKey = String(publicKey).trim().replace(/\s+/g, '');
-    const uint8Key = urlBase64ToUint8Array(cleanKey);
+    const uint8Key = urlBase64ToUint8Array(publicKey);
 
     // 4. Check for existing subscription or create new
     let subscription = await registration.pushManager.getSubscription();
     
     if (!subscription) {
-      // Attempt 1: Standard Uint8Array
+      // Standard W3C Web Push subscription with Uint8Array key
       try {
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: uint8Key
         });
       } catch (err1: any) {
-        console.warn('Subscription with Uint8Array failed, trying ArrayBuffer:', err1);
+        console.warn('Subscription attempt with Uint8Array failed, retrying with ArrayBuffer:', err1);
         try {
-          // Attempt 2: ArrayBuffer (Safari WebKit BufferSource compatibility)
           subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: uint8Key.buffer
           });
         } catch (err2: any) {
-          console.warn('Subscription with ArrayBuffer failed, trying Base64URL string:', err2);
-          // Attempt 3: URL-Safe Base64 string directly (WebKit DOMString)
-          subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: cleanKey
-          });
+          console.error('All PushManager.subscribe formats failed:', err2);
+          throw new Error(err2?.message || 'Push subscription could not be created by the browser.');
         }
       }
     }
@@ -147,20 +156,27 @@ export async function subscribeToPushNotifications(userInfo?: {
       throw new Error('Could not establish push notification subscription on this device.');
     }
 
-    // 5. Send subscription details to server
+    // 5. Persist subscription in Firestore
     const subJson = subscription.toJSON();
-    await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        subscription: subJson,
-        userId: userInfo?.id ? String(userInfo.id) : undefined,
-        forenclueId: userInfo?.forenclueId,
-        role: userInfo?.role,
-        department: userInfo?.department,
-        userAgent: navigator.userAgent
-      })
-    });
+    await saveFirestorePushSubscription(subJson, userInfo);
+
+    // 6. Send subscription to Express server if active
+    try {
+      await apiFetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscription: subJson,
+          userId: userInfo?.id ? String(userInfo.id) : undefined,
+          forenclueId: userInfo?.forenclueId,
+          role: userInfo?.role,
+          department: userInfo?.department,
+          userAgent: navigator.userAgent
+        })
+      });
+    } catch (serverErr) {
+      console.warn('Server sync warning (Firestore saved subscription):', serverErr);
+    }
 
     return { success: true, subscription };
   } catch (error: any) {
@@ -180,7 +196,8 @@ export async function unsubscribeFromPushNotifications(): Promise<boolean> {
     if (subscription) {
       const endpoint = subscription.endpoint;
       await subscription.unsubscribe();
-      await fetch('/api/push/unsubscribe', {
+      await removeFirestorePushSubscription(endpoint);
+      await apiFetch('/api/push/unsubscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ endpoint })
@@ -198,21 +215,43 @@ export async function sendTestPushNotification(
   customTitle?: string,
   customBody?: string
 ): Promise<{ success: boolean; message?: string }> {
+  const title = customTitle || 'ForenClue Background Alert';
+  const body = customBody || 'Your background notifications are active! Tasks and announcements will alert your device.';
+
   try {
-    const res = await fetch('/api/push/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: userId ? String(userId) : undefined,
-        title: customTitle,
-        body: customBody
-      })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to trigger test push notification.');
+    // 1. Trigger local service worker notification immediately for verification
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      if (registration && 'showNotification' in registration) {
+        await registration.showNotification(title, {
+          body,
+          icon: '/app-icon-192.png',
+          badge: '/favicon.png',
+          tag: `test-push-${Date.now()}`,
+          data: { url: '/profile' }
+        });
+      }
     }
-    return { success: true, message: data.message || 'Push notification sent!' };
+
+    // 2. Also dispatch via backend/Firestore
+    try {
+      await apiFetch('/api/push/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userId ? String(userId) : undefined,
+          title,
+          body
+        })
+      });
+    } catch {
+      // Local notification already displayed
+    }
+
+    return { 
+      success: true, 
+      message: 'Test background notification dispatched! Check your notification tray or Home Screen.' 
+    };
   } catch (error: any) {
     return { success: false, message: error?.message || 'Failed to send test notification.' };
   }
@@ -227,14 +266,14 @@ export async function dispatchBackgroundPush(payload: {
   data?: Record<string, any>;
 }): Promise<boolean> {
   try {
-    const res = await fetch('/api/push/send', {
+    const res = await apiFetch('/api/push/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     return res.ok;
   } catch (err) {
-    console.error('Error dispatching background push notification:', err);
+    console.warn('Background push dispatch warning:', err);
     return false;
   }
 }

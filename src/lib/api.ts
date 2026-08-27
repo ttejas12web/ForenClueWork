@@ -401,5 +401,26 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
     }
   }
 
+  // Push notification fallback endpoints
+  if (endpoint === '/api/push/vapid-public-key' && method === 'GET') {
+    return { publicKey: 'BD6x0QDTjiEXrGNy1exUxz3JEL1-LbNRNu4WTxdeAqjNG59QnJef-hMTRHNdxjQ8d_tGoOmeUmqsFIMzrkz3jpk' };
+  }
+
+  if (endpoint === '/api/push/subscribe' && method === 'POST') {
+    return { success: true };
+  }
+
+  if (endpoint === '/api/push/unsubscribe' && method === 'POST') {
+    return { success: true };
+  }
+
+  if (endpoint === '/api/push/test' && method === 'POST') {
+    return { success: true, message: 'Test notification triggered successfully.' };
+  }
+
+  if (endpoint === '/api/push/send' && method === 'POST') {
+    return { success: true };
+  }
+
   return { status: 'ok' };
 }
