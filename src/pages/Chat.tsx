@@ -157,6 +157,7 @@ export const Chat = () => {
   const [selectedPreset, setSelectedPreset] = useState(PRESET_AVATARS[0].id);
   const [customAvatarUrl, setCustomAvatarUrl] = useState('');
   const [uploadedAvatarPreview, setUploadedAvatarPreview] = useState('');
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [selectedMemberIds, setSelectedMemberIds] = useState<any[]>([]);
   const [memberFilterQuery, setMemberFilterQuery] = useState('');
   const [memberRoleFilter, setMemberRoleFilter] = useState<'ALL' | 'VOLUNTEER' | 'EMPLOYEE' | 'ADMIN'>('ALL');
@@ -451,7 +452,7 @@ export const Chat = () => {
   };
 
   // Handle avatar image file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
@@ -462,16 +463,22 @@ export const Chat = () => {
         }
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
+      setIsUploadingAvatar(true);
+      try {
+        const result = await uploadWorkspaceFile(file, file.name, 'group_avatars', token);
         if (isEdit) {
-          setEditUploadedAvatarPreview(reader.result as string);
+          setEditUploadedAvatarPreview(result.url);
         } else {
-          setUploadedAvatarPreview(reader.result as string);
+          setUploadedAvatarPreview(result.url);
           setFormError('');
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (error: any) {
+        const message = error?.message || 'Unable to upload the group image to R2.';
+        if (isEdit) alert(message);
+        else setFormError(message);
+      } finally {
+        setIsUploadingAvatar(false);
+      }
     }
   };
 
@@ -1825,10 +1832,10 @@ export const Chat = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingGroup}
+                  disabled={isSubmittingGroup || isUploadingAvatar}
                   className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl shadow-sm transition-all cursor-pointer"
                 >
-                  {isSubmittingGroup ? 'Creating...' : 'Create Group'}
+                  {isUploadingAvatar ? 'Uploading image...' : isSubmittingGroup ? 'Creating...' : 'Create Group'}
                 </button>
               </div>
             </form>

@@ -15,13 +15,8 @@ import {
   Timestamp,
   Unsubscribe
 } from 'firebase/firestore';
-import { 
-  ref, 
-  uploadBytes, 
-  getDownloadURL 
-} from 'firebase/storage';
 import bcrypt from 'bcryptjs';
-import { db, storage, handleFirestoreError, OperationType } from './firebase';
+import { db, handleFirestoreError, OperationType } from './firebase';
 import { dispatchBackgroundPush } from './pushNotifications';
 import { uploadWorkspaceFile } from './storageService';
 
@@ -1207,51 +1202,21 @@ export async function sendFirestoreMessage(
 }
 
 export async function uploadTaskAttachment(file: File): Promise<{ url: string; name: string; type: string }> {
-  try {
-    const result = await uploadWorkspaceFile(file, file.name, 'task_attachments');
-    return {
-      url: result.url,
-      name: result.name,
-      type: result.type.startsWith('image/') ? 'image' : 'file',
-    };
-  } catch (error) {
-    console.warn('Task attachment upload fallback:', error);
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        resolve({
-          url: reader.result as string,
-          name: file.name,
-          type: file.type.startsWith('image/') ? 'image' : 'file',
-        });
-      };
-      reader.readAsDataURL(file);
-    });
-  }
+  const result = await uploadWorkspaceFile(file, file.name, 'task_attachments');
+  return {
+    url: result.url,
+    name: result.name,
+    type: result.type.startsWith('image/') ? 'image' : 'file',
+  };
 }
 
 export async function uploadChatAttachment(file: File): Promise<{ url: string; name: string; type: string }> {
-  try {
-    const result = await uploadWorkspaceFile(file, file.name, 'chat_attachments');
-    return {
-      url: result.url,
-      name: result.name,
-      type: result.type.startsWith('image/') ? 'image' : 'file',
-    };
-  } catch (error) {
-    console.warn('Chat attachment upload fallback:', error);
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        resolve({
-          url: reader.result as string,
-          name: file.name,
-          type: file.type.startsWith('image/') ? 'image' : 'file',
-        });
-      };
-      reader.readAsDataURL(file);
-    });
-  }
+  const result = await uploadWorkspaceFile(file, file.name, 'chat_attachments');
+  return {
+    url: result.url,
+    name: result.name,
+    type: result.type.startsWith('image/') ? 'image' : 'file',
+  };
 }
 
 export async function updateFirestoreChatGroup(
@@ -1674,4 +1639,3 @@ export async function updateUserBySuperAdmin(
     throw error;
   }
 }
-
