@@ -1,5 +1,5 @@
 import { storage } from './firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 export interface UploadResult {
   url: string;
@@ -41,9 +41,15 @@ async function readJsonResponse(response: Response): Promise<any> {
 
 export async function getStorageStatus(token?: string | null): Promise<StorageStatus> {
   try {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 2000) : null;
+
     const response = await fetch(getStorageBaseUrl() + '/api/storage/status', {
-      headers: getAuthorizationHeader(token)
+      headers: getAuthorizationHeader(token),
+      signal: controller?.signal
     });
+    if (timeoutId) clearTimeout(timeoutId);
+
     const payload = await readJsonResponse(response);
     if (!response.ok) return { configured: true, maxFileSizeMb: 25 };
     return payload as StorageStatus;
@@ -54,8 +60,9 @@ export async function getStorageStatus(token?: string | null): Promise<StorageSt
 
 /**
  * Compresses an image to an optimized Data URL to guarantee transmission on any static domain or offline mode.
+ * Always outputs highly compressed JPEG/WebP to stay well below Firestore 1MB document bounds.
  */
-async function compressImageToDataUrl(file: File | Blob, maxWidth = 1600, maxHeight = 1600, quality = 0.85): Promise<string> {
+async function compressImageToDataUrl(file: File | Blob, maxDimension = 1100, initialQuality = 0.75): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -63,23 +70,45 @@ async function compressImageToDataUrl(file: File | Blob, maxWidth = 1600, maxHei
       img.onload = () => {
         let width = img.width;
         let height = img.height;
-        if (width > maxWidth || height > maxHeight) {
+        
+        // Scale down dimensions if exceeding max bounds
+        if (width > maxDimension || height > maxDimension) {
           if (width > height) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
           } else {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
           }
         }
+
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
-          const mime = (file as File).type === 'image/png' ? 'image/png' : 'image/jpeg';
-          resolve(canvas.toDataURL(mime, quality));
+          
+          // Use JPEG compression (or WEBP) which drastically compresses both PNG and JPEG images to < 180KB
+          let outputData = canvas.toDataURL('image/jpeg', initialQuality);
+          
+          // If still over 280KB, do a second pass with lower dimension & quality
+          if (outputData.length > 280000) {
+            const smallCanvas = document.createElement('canvas');
+            const targetW = Math.round(width * 0.75);
+            const targetH = Math.round(height * 0.75);
+            smallCanvas.width = targetW;
+            smallCanvas.height = targetH;
+            const smallCtx = smallCanvas.getContext('2d');
+            if (smallCtx) {
+              smallCtx.drawImage(img, 0, 0, targetW, targetH);
+              outputData = smallCanvas.toDataURL('image/jpeg', 0.65);
+            }
+          }
+          
+          resolve(outputData);
         } else {
           resolve((e.target?.result as string) || '');
         }
@@ -119,8 +148,9 @@ export async function uploadWorkspaceFile(
 
   const originalName = fileName || (file instanceof File ? file.name : 'file_' + Date.now());
   const fileType = (file as File).type || 'application/octet-stream';
+  const isImage = fileType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg|avif|bmp)$/i.test(originalName);
 
-  // 1. First Tier: Try Server Backend Upload (if backend storage endpoint is active)
+  // 1. First Tier: Try Server Backend Upload with 2.5s Timeout
   try {
     const formData = new FormData();
     formData.append('file', file, originalName);
@@ -129,11 +159,16 @@ export async function uploadWorkspaceFile(
     const baseUrl = getStorageBaseUrl();
     const endpoint = baseUrl ? `${baseUrl}/api/storage/upload` : '/api/storage/upload';
     
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 2500) : null;
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: getAuthorizationHeader(token),
-      body: formData
+      body: formData,
+      signal: controller?.signal
     });
+    if (timeoutId) clearTimeout(timeoutId);
 
     const contentType = response.headers.get('content-type') || '';
     if (response.ok && contentType.includes('application/json')) {
@@ -150,39 +185,68 @@ export async function uploadWorkspaceFile(
       }
     }
   } catch (serverErr) {
-    console.info('Backend server upload unavailable, switching to Firebase Storage tier:', serverErr);
+    console.info('Backend server upload unavailable or timed out, switching to client storage:', serverErr);
   }
 
-  // 2. Second Tier: Direct Client Firebase Storage (articulate-listener-rlcf1.firebasestorage.app)
+  // 2. Second Tier: Direct Client Firebase Storage (with 3-second strict timeout)
   try {
     const timestamp = Date.now();
     const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
     const storagePath = `${folder}/${timestamp}_${safeName}`;
     const storageRef = ref(storage, storagePath);
 
-    const snapshot = await uploadBytes(storageRef, file, {
-      contentType: fileType
+    // Use a resumable task so a production storage failure can be cancelled instead of
+    // continuing Firebase's default retry loop for several minutes in the background.
+    const uploadTask = uploadBytesResumable(storageRef, file, { contentType: fileType });
+    const snapshot = await new Promise<any>((resolve, reject) => {
+      let settled = false;
+      const timeoutId = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        uploadTask.cancel();
+        reject(new Error('Firebase Storage connection timed out'));
+      }, 3000);
+
+      uploadTask.then(
+        (result) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          resolve(result);
+        },
+        (error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          reject(error);
+        }
+      );
     });
     const downloadUrl = await getDownloadURL(snapshot.ref);
 
-    return {
-      url: downloadUrl,
-      key: storagePath,
-      name: originalName,
-      size: file.size,
-      type: fileType,
-      storageProvider: 'firebase_storage'
-    };
+    if (downloadUrl) {
+      return {
+        url: downloadUrl,
+        key: storagePath,
+        name: originalName,
+        size: file.size,
+        type: fileType,
+        storageProvider: 'firebase_storage'
+      };
+    }
   } catch (firebaseStorageErr) {
-    console.warn('Firebase Storage upload failed or restricted, switching to resilient Data fallback:', firebaseStorageErr);
+    console.warn('Firebase Storage upload unavailable, switching to instant data compression:', firebaseStorageErr);
   }
 
-  // 3. Third Tier: Resilient Data URL Fallback (Works 100% everywhere on any custom domain)
+  // 3. Third Tier: Fast Optimized Data Encoding (Instant, works 100% reliably on work.forenclue.in)
   try {
     let dataUrl: string;
-    if (fileType.startsWith('image/')) {
+    if (isImage) {
       dataUrl = await compressImageToDataUrl(file);
     } else {
+      if (file.size > 600 * 1024) {
+        throw new Error('This document file is larger than 600 KB. Please attach a smaller file or image.');
+      }
       dataUrl = await fileToDataUrl(file);
     }
 
@@ -191,15 +255,17 @@ export async function uploadWorkspaceFile(
         url: dataUrl,
         key: `inline_${Date.now()}_${originalName}`,
         name: originalName,
-        size: file.size,
+        size: Math.round(dataUrl.length * 0.75),
         type: fileType,
         storageProvider: 'inline_data'
       };
     }
-  } catch (dataErr) {
-    console.error('Data URL conversion failed:', dataErr);
+  } catch (dataErr: any) {
+    console.error('Data conversion failed:', dataErr);
+    throw new Error(dataErr.message || 'Unable to encode file for transmission.');
   }
 
   throw new Error('Failed to attach and upload file. Please check file format and retry.');
 }
+
 

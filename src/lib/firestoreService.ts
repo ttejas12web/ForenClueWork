@@ -23,6 +23,7 @@ import {
 import bcrypt from 'bcryptjs';
 import { db, storage, handleFirestoreError, OperationType } from './firebase';
 import { dispatchBackgroundPush } from './pushNotifications';
+import { uploadWorkspaceFile } from './storageService';
 
 export interface FirestoreUser {
   id: string;
@@ -1148,11 +1149,14 @@ export async function sendFirestoreMessage(
 
     // Update parent group's lastMessage if group exists
     if (groupSnap.exists()) {
+      const isDataUrl = typeof attachment?.url === 'string' && attachment.url.startsWith('data:');
+      const previewAttachmentUrl = isDataUrl ? 'inline_attachment' : (attachment?.url || null);
+
       await updateDoc(doc(db, 'chat_groups', groupId), {
         lastMessage: {
           id: docRef.id,
           content: isE2EE ? '🔒 [Encrypted Message]' : (finalContent || (attachment ? `📎 ${attachment.name}` : '')),
-          attachmentUrl: attachment?.url || null,
+          attachmentUrl: previewAttachmentUrl,
           attachmentName: attachment?.name || null,
           createdAt: messageData.createdAt,
           senderName: senderName,
@@ -1204,16 +1208,14 @@ export async function sendFirestoreMessage(
 
 export async function uploadTaskAttachment(file: File): Promise<{ url: string; name: string; type: string }> {
   try {
-    const storageRef = ref(storage, `task_attachments/${Date.now()}_${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    const url = await getDownloadURL(snapshot.ref);
+    const result = await uploadWorkspaceFile(file, file.name, 'task_attachments');
     return {
-      url,
-      name: file.name,
-      type: file.type.startsWith('image/') ? 'image' : 'file',
+      url: result.url,
+      name: result.name,
+      type: result.type.startsWith('image/') ? 'image' : 'file',
     };
   } catch (error) {
-    console.warn('Storage upload fallback:', error);
+    console.warn('Task attachment upload fallback:', error);
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = () => {
@@ -1230,17 +1232,14 @@ export async function uploadTaskAttachment(file: File): Promise<{ url: string; n
 
 export async function uploadChatAttachment(file: File): Promise<{ url: string; name: string; type: string }> {
   try {
-    const storageRef = ref(storage, `chat_attachments/${Date.now()}_${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    const url = await getDownloadURL(snapshot.ref);
+    const result = await uploadWorkspaceFile(file, file.name, 'chat_attachments');
     return {
-      url,
-      name: file.name,
-      type: file.type.startsWith('image/') ? 'image' : 'file',
+      url: result.url,
+      name: result.name,
+      type: result.type.startsWith('image/') ? 'image' : 'file',
     };
   } catch (error) {
-    // If storage is unavailable or offline, create a local object URL / data URL fallback
-    console.warn('Storage upload fallback:', error);
+    console.warn('Chat attachment upload fallback:', error);
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = () => {
