@@ -33,6 +33,8 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { apiFetch } from '../lib/api';
 import { uploadWorkspaceFile } from '../lib/storageService';
+import { UserNetworkTag } from '../components/UserNetworkTag';
+import { useNetworkStatus } from '../lib/useNetworkStatus';
 
 function formatAttachmentUrl(url?: string | null): string {
   if (!url) return '';
@@ -126,6 +128,7 @@ const PRESET_AVATARS = [
 
 export const Chat = () => {
   const { user, token } = useAuthStore();
+  const { isOffline } = useNetworkStatus();
   const [searchParams] = useSearchParams();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
@@ -877,7 +880,10 @@ export const Chat = () => {
         <div className="p-3.5 sm:p-4 border-b border-slate-200 bg-white">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900">Workspace Chat</h2>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-sm sm:text-base font-bold text-slate-900">Workspace Chat</h2>
+                <UserNetworkTag variant="compact" showWhenOnline={false} />
+              </div>
               <p className="text-[11px] text-slate-500">{groups.length} active channels & direct chats</p>
             </div>
             {isSuperAdmin && (
@@ -1038,7 +1044,7 @@ export const Chat = () => {
 
                 <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-xs flex-shrink-0 relative">
                   {(activeGroup.otherUser?.name || activeGroup.displayName || activeGroup.name).charAt(0)}
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 rounded-full border-2 border-white" />
+                  <UserNetworkTag variant="dot" showWhenOnline={true} className="absolute -bottom-0.5 -right-0.5" />
                 </div>
                 
                 <div className="truncate">
@@ -1343,6 +1349,15 @@ export const Chat = () => {
               </div>
             )}
 
+            {isOffline && (
+              <div className="mb-2 px-3.5 py-2 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between text-xs text-rose-800 shadow-2xs">
+                <div className="flex items-center space-x-2">
+                  <UserNetworkTag variant="compact" />
+                  <span className="font-medium text-[11px] sm:text-xs">Network disconnected. Messages will be enabled when connection is restored.</span>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
               <input 
                 type="file" 
@@ -1353,8 +1368,9 @@ export const Chat = () => {
               <button
                 type="button"
                 onClick={() => messageFileInputRef.current?.click()}
-                className="p-2.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer flex-shrink-0"
-                title="Attach file or image to send to Super Admin / Group"
+                disabled={isOffline}
+                className="p-2.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 disabled:opacity-40 rounded-xl transition-colors cursor-pointer flex-shrink-0"
+                title={isOffline ? "Cannot attach files while offline" : "Attach file or image to send to Super Admin / Group"}
               >
                 <Paperclip className="h-4 w-4" />
               </button>
@@ -1363,12 +1379,13 @@ export const Chat = () => {
                 type="text"
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
-                placeholder={`Message #${activeGroup.name} or add file attachment...`}
-                className="flex-1 px-3.5 sm:px-4 py-2.5 bg-slate-100 border border-transparent rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-slate-400"
+                disabled={isOffline}
+                placeholder={isOffline ? "You are offline. Connect to network to send messages..." : `Message #${activeGroup.name} or add file attachment...`}
+                className="flex-1 px-3.5 sm:px-4 py-2.5 bg-slate-100 border border-transparent rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60 disabled:bg-slate-100 transition-all placeholder:text-slate-400"
               />
               <button
                 type="submit"
-                disabled={(!messageText.trim() && !selectedFile) || isSending}
+                disabled={(!messageText.trim() && !selectedFile) || isSending || isOffline}
                 className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-semibold text-xs rounded-xl shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer min-h-[40px]"
               >
                 {isSending ? (

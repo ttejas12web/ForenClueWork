@@ -3,6 +3,7 @@ import { Outlet, useLocation, Link } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { PwaInstallPrompt } from "../components/PwaInstallPrompt";
+import { OfflineNetworkBanner } from "../components/UserNetworkTag";
 import { useAuthStore } from "../store/authStore";
 import { subscribeToChatGroups, subscribeToAnnouncements } from "../lib/firestoreService";
 import { showDeviceNotification } from "../lib/pushNotifications";
@@ -95,6 +96,9 @@ export const Layout = () => {
 
       {/* Main Content Area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* Offline Connectivity Warning Banner */}
+        <OfflineNetworkBanner />
+
         {/* Top App Bar */}
         <TopBar 
           mobileMenuOpen={mobileMenuOpen} 

@@ -213,6 +213,7 @@ export const Projects = () => {
                   <option value="Research">Research</option>
                   <option value="Events & Management">Events & Management</option>
                   <option value="Creative & Graphics">Creative & Graphics</option>
+                  <option value="Campus Ambassadors">Campus Ambassadors</option>
                 </select>
               </div>
 

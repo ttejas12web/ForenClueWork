@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { apiFetch } from '../lib/api';
+import { UserNetworkTag } from '../components/UserNetworkTag';
 import { 
   Mail, 
   Hash, 
@@ -77,8 +78,8 @@ const DEPARTMENT_MENTORS: Record<string, DepartmentMentor> = {
     color: 'bg-emerald-600'
   },
   'Research': {
-    name: 'Purva Bhawsar',
-    forenclueId: 'FC-EMP-2026-004',
+    name: 'Mrunmayee Bodhe',
+    forenclueId: 'FC-EMP-2026-002',
     code: 'RS',
     color: 'bg-blue-600'
   },
@@ -93,6 +94,18 @@ const DEPARTMENT_MENTORS: Record<string, DepartmentMentor> = {
     forenclueId: 'FC-EMP-2026-001',
     code: 'CF',
     color: 'bg-indigo-600'
+  },
+  'Campus Ambassadors': {
+    name: 'All Super Admins (Council)',
+    forenclueId: 'FC-EMP-2026-001',
+    code: 'CA',
+    color: 'bg-gradient-to-tr from-amber-500 via-amber-600 to-orange-600'
+  },
+  'Campus Ambassador': {
+    name: 'All Super Admins (Council)',
+    forenclueId: 'FC-EMP-2026-001',
+    code: 'CA',
+    color: 'bg-gradient-to-tr from-amber-500 via-amber-600 to-orange-600'
   }
 };
 
@@ -381,7 +394,7 @@ export const Profile = () => {
               <div className="h-24 w-24 sm:h-32 sm:w-32 rounded-2xl border-4 border-white bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-600 text-white flex items-center justify-center text-3xl sm:text-4xl font-bold shadow-md">
                 {user.name.charAt(0)}
               </div>
-              <span className="absolute bottom-1 right-1 h-4 w-4 bg-emerald-500 border-2 border-white rounded-full" title="Online & Active" />
+              <UserNetworkTag variant="dot" showWhenOnline={true} className="absolute bottom-1 right-1 h-5 w-5 ring-4 ring-white" />
             </div>
             
             {/* Identity Info */}
@@ -400,6 +413,7 @@ export const Profile = () => {
                     Lead Mentor
                   </span>
                 )}
+                <UserNetworkTag variant="badge" showWhenOnline={true} />
               </div>
 
               <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-600">
@@ -618,6 +632,10 @@ export const Profile = () => {
                   <span className="text-emerald-400 font-bold">Verified Active</span>
                 </div>
                 <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Network Connection</span>
+                  <UserNetworkTag variant="compact" showWhenOnline={true} />
+                </div>
+                <div className="flex items-center justify-between">
                   <span className="text-slate-400">Security Clearance</span>
                   <span className="text-blue-400 font-semibold">{isSuperAdmin ? 'Tier-1 Executive (LEVEL 1)' : 'Tier-2 Active'}</span>
                 </div>
@@ -709,7 +727,11 @@ export const Profile = () => {
                 </Link>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                userDept.toLowerCase().includes('campus ambassador') || user.role === 'CAMPUS_AMBASSADOR'
+                  ? 'bg-gradient-to-r from-amber-50/80 via-white to-orange-50/40 border-amber-300 shadow-2xs'
+                  : 'bg-slate-50 border-slate-200'
+              }`}>
                 <div className="flex items-center space-x-3.5">
                   <div className={`h-11 w-11 rounded-xl ${mentorInfo.color} text-white flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0`}>
                     {mentorInfo.code}
@@ -717,13 +739,25 @@ export const Profile = () => {
                   <div>
                     <div className="flex items-center space-x-2">
                       <h4 className="font-bold text-slate-900 text-sm">{userDept}</h4>
-                      <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-800 font-bold rounded-full">
-                        Assigned Unit
+                      <span className={`text-[10px] px-2 py-0.5 font-bold rounded-full ${
+                        userDept.toLowerCase().includes('campus ambassador') || user.role === 'CAMPUS_AMBASSADOR'
+                          ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {userDept.toLowerCase().includes('campus ambassador') || user.role === 'CAMPUS_AMBASSADOR'
+                          ? 'Special Unit • Super Admin Council'
+                          : 'Assigned Unit'}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5 flex items-center">
                       <Crown className="h-3 w-3 mr-1 text-amber-500 flex-shrink-0" />
-                      <span>Lead Mentor: <strong className="text-slate-800">{mentorInfo.name}</strong> ({mentorInfo.forenclueId})</span>
+                      <span>
+                        {userDept.toLowerCase().includes('campus ambassador') || user.role === 'CAMPUS_AMBASSADOR' ? (
+                          <>Department Mentors: <strong className="text-amber-950 font-bold">All Super Admins</strong> (Direct Council Guidance)</>
+                        ) : (
+                          <>Lead Mentor: <strong className="text-slate-800">{mentorInfo.name}</strong> ({mentorInfo.forenclueId})</>
+                        )}
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -731,7 +765,11 @@ export const Profile = () => {
                 <div className="flex items-center space-x-2 self-start sm:self-auto">
                   <Link
                     to={`/chat?directUser=${encodeURIComponent(mentorInfo.forenclueId)}`}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-2xs transition-colors cursor-pointer"
+                    className={`px-3 py-1.5 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-2xs transition-colors cursor-pointer ${
+                      userDept.toLowerCase().includes('campus ambassador') || user.role === 'CAMPUS_AMBASSADOR'
+                        ? 'bg-amber-600 hover:bg-amber-700'
+                        : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
                   >
                     <Send className="h-3.5 w-3.5" />
                     <span>Message Mentor</span>

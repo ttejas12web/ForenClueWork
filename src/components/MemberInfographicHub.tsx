@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TaskAllowedCalendar } from './TaskAllowedCalendar';
+import { UserNetworkTag } from './UserNetworkTag';
 
 interface DepartmentStat {
   department: string;
@@ -225,9 +226,12 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="space-y-2 max-w-xl">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold border border-white/10 text-blue-300">
-              <Sparkles className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
-              <span>Official Member Operations Center</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center space-x-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold border border-white/10 text-blue-300">
+                <Sparkles className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
+                <span>Official Member Operations Center</span>
+              </div>
+              <UserNetworkTag variant="badge" showWhenOnline={false} className="bg-rose-500/20 text-rose-200 border-rose-400/40" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
               Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-300 via-cyan-200 to-emerald-300">{user.name}</span>

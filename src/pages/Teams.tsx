@@ -14,12 +14,17 @@ import {
   ExternalLink,
   User,
   PlusCircle,
-  RefreshCw
+  RefreshCw,
+  Sparkles,
+  GraduationCap,
+  ShieldAlert,
+  Shield
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { fetchAllUsers, subscribeToUsers, FirestoreUser } from '../lib/firestoreService';
+import { UserNetworkTag } from '../components/UserNetworkTag';
 
 interface TeamMember {
   id: string | number;
@@ -41,6 +46,8 @@ interface DepartmentInfo {
   mentorEmail: string;
   color: string;
   badgeColor: string;
+  isSpecial?: boolean;
+  tag?: string;
   groupId?: number;
 }
 
@@ -77,9 +84,9 @@ export const Teams = () => {
       name: 'Research', 
       desc: 'Scientific literature review, forensic methodology analysis, evidence validation, and laboratory findings.', 
       code: 'RS', 
-      mentorName: 'Purva Bhawsar',
-      mentorId: 'FC-EMP-2026-004',
-      mentorEmail: 'purva.bhawsar@forenclue.in',
+      mentorName: 'Mrunmayee Bodhe',
+      mentorId: 'FC-EMP-2026-002',
+      mentorEmail: 'mrunmayee.bodhe@forenclue.in',
       color: 'bg-blue-600',
       badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
     },
@@ -102,6 +109,18 @@ export const Teams = () => {
       mentorEmail: 'ttapse12@gmail.com',
       color: 'bg-indigo-600',
       badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+    },
+    { 
+      name: 'Campus Ambassadors', 
+      desc: 'National student outreach, university relations, forensic masterclass promotions, campus taskforces, and student community initiatives.', 
+      code: 'CA', 
+      mentorName: 'All Super Admins (Executive Council)',
+      mentorId: 'FC-EMP-2026-001',
+      mentorEmail: 'ttapse12@gmail.com',
+      color: 'bg-gradient-to-tr from-amber-500 via-amber-600 to-orange-600',
+      badgeColor: 'bg-amber-50 text-amber-900 border-amber-300',
+      isSpecial: true,
+      tag: 'Executive Super Admin Mentorship'
     },
   ];
 
@@ -157,7 +176,21 @@ export const Teams = () => {
     };
   }, [token]);
 
+  const superAdminMentors = members.filter(m => m.role === 'SUPER_ADMIN' && m.active !== false);
+  const effectiveSuperAdminMentors = superAdminMentors.length > 0 ? superAdminMentors : [
+    {
+      id: 'emp_001',
+      forenclueId: 'FC-EMP-2026-001',
+      name: 'Tejas Tapse',
+      email: 'ttapse12@gmail.com',
+      role: 'SUPER_ADMIN',
+      designation: 'Founder & Lead Forensic Specialist | Executive Mentor',
+      active: true
+    }
+  ];
+
   const getDeptMembers = (deptName: string): TeamMember[] => {
+    const isCampusAmbassadors = deptName.toLowerCase().includes('campus ambassador');
     const deptInfo = departments.find(d => d.name.toLowerCase() === deptName.toLowerCase());
     const seen = new Set<string>();
 
@@ -167,15 +200,20 @@ export const Teams = () => {
       if (seen.has(memId)) return false;
 
       // 1. Department match (case-insensitive & trimmed)
-      const matchesDeptName = m.department && m.department.trim().toLowerCase() === deptName.trim().toLowerCase();
+      const userDeptClean = (m.department || '').trim().toLowerCase();
+      const matchesDeptName = userDeptClean === deptName.trim().toLowerCase() ||
+        (isCampusAmbassadors && (userDeptClean.includes('campus ambassador') || userDeptClean.includes('ambassador')));
 
-      // 2. Mentor designated for this department
-      const matchesMentor = deptInfo && (
+      // 2. Role match for Campus Ambassador
+      const matchesRole = isCampusAmbassadors && m.role === 'CAMPUS_AMBASSADOR';
+
+      // 3. Mentor designated for this department (standard single mentor)
+      const matchesMentor = !isCampusAmbassadors && deptInfo && (
         (m.forenclueId && m.forenclueId.trim().toUpperCase() === deptInfo.mentorId.trim().toUpperCase()) ||
         (m.email && m.email.trim().toLowerCase() === deptInfo.mentorEmail.trim().toLowerCase())
       );
 
-      if (matchesDeptName || matchesMentor) {
+      if (matchesDeptName || matchesRole || matchesMentor) {
         seen.add(memId);
         return true;
       }
@@ -253,47 +291,91 @@ export const Teams = () => {
         {departments.map((dept) => {
           const deptCount = getDeptMembers(dept.name).length;
           const isSelected = selectedDept === dept.name;
+          const isSpecialDept = dept.isSpecial || dept.name === 'Campus Ambassadors';
 
           return (
             <div 
               key={dept.name} 
               id={`dept-card-${dept.code}`}
               onClick={() => handleViewRoster(dept.name)}
-              className={`bg-white rounded-2xl shadow-2xs border p-5 sm:p-6 flex flex-col justify-between cursor-pointer transition-all ${
-                isSelected 
-                  ? 'border-blue-600 ring-2 ring-blue-600/10 shadow-sm' 
-                  : 'border-slate-200 hover:border-slate-300'
+              className={`rounded-2xl shadow-2xs border p-5 sm:p-6 flex flex-col justify-between cursor-pointer transition-all relative overflow-hidden ${
+                isSpecialDept
+                  ? isSelected
+                    ? 'bg-gradient-to-br from-amber-50/90 via-white to-orange-50/60 border-amber-500 ring-2 ring-amber-500/20 shadow-md'
+                    : 'bg-gradient-to-br from-amber-50/40 via-white to-orange-50/20 border-amber-300/80 hover:border-amber-400 hover:shadow-xs'
+                  : isSelected 
+                    ? 'bg-white border-blue-600 ring-2 ring-blue-600/10 shadow-sm' 
+                    : 'bg-white border-slate-200 hover:border-slate-300'
               }`}
             >
+              {/* Special Campus Ambassadors Ribbon */}
+              {isSpecialDept && (
+                <div className="mb-3">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white text-[10px] font-extrabold uppercase tracking-wider shadow-2xs">
+                    <Sparkles className="h-3 w-3 text-amber-200 animate-pulse" />
+                    All Super Admins Mentorship
+                  </span>
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className={`h-11 w-11 ${dept.color} text-white rounded-xl flex items-center justify-center font-bold text-sm shadow-xs`}>
-                    {dept.code}
+                    {isSpecialDept ? <GraduationCap className="h-5 w-5" /> : dept.code}
                   </div>
                   <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${dept.badgeColor}`}>
                     {deptCount} {deptCount === 1 ? 'Member' : 'Members'}
                   </span>
                 </div>
 
-                <h3 className="text-base font-bold text-slate-900">{dept.name}</h3>
+                <div className="flex items-center space-x-2">
+                  <h3 className={`text-base font-bold ${isSpecialDept ? 'text-amber-950' : 'text-slate-900'}`}>{dept.name}</h3>
+                </div>
                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">{dept.desc}</p>
               </div>
 
               <div className="mt-5 pt-4 border-t border-slate-100 space-y-3">
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center space-x-1.5 text-slate-700 text-[11px] font-medium">
-                    <Crown className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
-                    <span className="text-slate-500">Lead Mentor:</span>
-                    <span className="font-bold text-slate-900">{dept.mentorName}</span>
+                    {isSpecialDept ? (
+                      <Shield className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                    ) : (
+                      <Crown className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                    )}
+                    <span className="text-slate-500">
+                      {isSpecialDept ? 'Department Mentors:' : 'Lead Mentor:'}
+                    </span>
+                    <span className={`font-bold ${isSpecialDept ? 'text-amber-900' : 'text-slate-900'}`}>
+                      {isSpecialDept ? 'All Super Admins' : dept.mentorName}
+                    </span>
                   </div>
                 </div>
+
+                {/* Mentors preview list for special department */}
+                {isSpecialDept && effectiveSuperAdminMentors.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {effectiveSuperAdminMentors.map((admin) => (
+                      <span 
+                        key={String(admin.id || admin.forenclueId)}
+                        className="text-[10px] bg-amber-100/80 text-amber-900 font-semibold px-2 py-0.5 rounded-md border border-amber-200/80 flex items-center gap-1"
+                      >
+                        <Crown className="h-2.5 w-2.5 text-amber-600" />
+                        {admin.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-3 gap-1.5 pt-1">
                   <button
                     type="button"
                     id={`view-roster-btn-${dept.code}`}
                     onClick={(e) => handleViewRoster(dept.name, e)}
-                    className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer"
+                    className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer ${
+                      isSpecialDept
+                        ? 'bg-amber-100/70 hover:bg-amber-200 text-amber-900'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
                     title={`View roster of members in ${dept.name}`}
                   >
                     <Users className="h-3.5 w-3.5" />
@@ -301,19 +383,30 @@ export const Teams = () => {
                   </button>
 
                   <Link
-                    to={`/chat?directUser=${encodeURIComponent(dept.mentorId)}`}
+                    to={isSpecialDept 
+                      ? `/chat?directUser=${encodeURIComponent(effectiveSuperAdminMentors[0]?.forenclueId || 'FC-EMP-2026-001')}`
+                      : `/chat?directUser=${encodeURIComponent(dept.mentorId)}`
+                    }
                     onClick={(e) => e.stopPropagation()}
-                    className="px-2 py-1.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer"
-                    title={`Open 1-on-1 personal chat with ${dept.mentorName}`}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer ${
+                      isSpecialDept
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs'
+                        : 'bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700'
+                    }`}
+                    title={isSpecialDept ? 'Open chat with Lead Super Admin Mentor' : `Open 1-on-1 personal chat with ${dept.mentorName}`}
                   >
-                    <User className="h-3.5 w-3.5" />
-                    <span>Mentor</span>
+                    {isSpecialDept ? <Shield className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+                    <span>{isSpecialDept ? 'Super Admins' : 'Mentor'}</span>
                   </Link>
 
                   <Link
                     to={`/chat?group=${encodeURIComponent(dept.name)}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer"
+                    className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer ${
+                      isSpecialDept
+                        ? 'bg-amber-100/70 hover:bg-amber-200 text-amber-900'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
                     title={`Open ${dept.name} Group Chat`}
                   >
                     <MessageSquare className="h-3 w-3" />
@@ -329,19 +422,32 @@ export const Teams = () => {
       {/* Selected Department Details & Members Section */}
       <div 
         id="department-roster-section" 
-        className="bg-white rounded-2xl border border-slate-200 shadow-2xs p-5 sm:p-6 space-y-5 scroll-mt-6"
+        className={`rounded-2xl border shadow-2xs p-5 sm:p-6 space-y-5 scroll-mt-6 ${
+          activeDeptData.name === 'Campus Ambassadors'
+            ? 'bg-gradient-to-b from-amber-50/40 via-white to-orange-50/10 border-amber-300'
+            : 'bg-white border-slate-200'
+        }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-slate-100">
           <div className="flex items-center space-x-3">
             <div className={`h-11 w-11 rounded-xl ${activeDeptData.color} text-white flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0`}>
-              {activeDeptData.code}
+              {activeDeptData.name === 'Campus Ambassadors' ? <GraduationCap className="h-6 w-6" /> : activeDeptData.code}
             </div>
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="font-bold text-lg text-slate-900">{selectedDept}</h2>
-                <span className="text-xs px-2.5 py-0.5 bg-blue-50 text-blue-700 font-bold rounded-full border border-blue-200">
+                <span className={`text-xs px-2.5 py-0.5 font-bold rounded-full border ${
+                  activeDeptData.name === 'Campus Ambassadors'
+                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                }`}>
                   {getDeptMembers(selectedDept).length} Assigned
                 </span>
+                {activeDeptData.name === 'Campus Ambassadors' && (
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] bg-amber-500 text-white font-bold px-2 py-0.5 rounded-full">
+                    <Sparkles className="h-2.5 w-2.5 text-amber-200" /> Special Unit
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 {activeDeptData.desc}
@@ -351,17 +457,31 @@ export const Teams = () => {
 
           {/* Department Action Buttons */}
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to={`/chat?directUser=${encodeURIComponent(activeDeptData.mentorId)}`}
-              className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
-            >
-              <User className="h-3.5 w-3.5 text-blue-600" />
-              <span>Message {activeDeptData.mentorName} (Mentor)</span>
-            </Link>
+            {activeDeptData.name === 'Campus Ambassadors' ? (
+              <Link
+                to={`/chat?directUser=${encodeURIComponent(effectiveSuperAdminMentors[0]?.forenclueId || 'FC-EMP-2026-001')}`}
+                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Shield className="h-3.5 w-3.5 text-amber-600" />
+                <span>Message Lead Super Admin ({effectiveSuperAdminMentors[0]?.name || 'Tejas Tapse'})</span>
+              </Link>
+            ) : (
+              <Link
+                to={`/chat?directUser=${encodeURIComponent(activeDeptData.mentorId)}`}
+                className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+              >
+                <User className="h-3.5 w-3.5 text-blue-600" />
+                <span>Message {activeDeptData.mentorName} (Mentor)</span>
+              </Link>
+            )}
 
             <Link
               to={`/chat?group=${encodeURIComponent(selectedDept)}`}
-              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
+              className={`px-3.5 py-2 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer ${
+                activeDeptData.name === 'Campus Ambassadors'
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
               <MessageSquare className="h-3.5 w-3.5" />
               <span>Open {selectedDept} Chat Group</span>
@@ -370,33 +490,101 @@ export const Teams = () => {
           </div>
         </div>
 
-        {/* Lead Mentor Spotlight Card */}
-        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center text-sm shadow-xs flex-shrink-0">
-              <Crown className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h4 className="text-sm font-bold text-slate-900">{activeDeptData.mentorName}</h4>
-                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full">
-                  Lead Mentor
-                </span>
+        {/* Lead Mentor Spotlight: Single Mentor OR All Super Admins Council */}
+        {activeDeptData.name === 'Campus Ambassadors' ? (
+          /* Special Super Admin Mentorship Council Panel with Official Badge */
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-100/70 via-amber-50/80 to-orange-50/80 border border-amber-300 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-amber-200/80">
+              <div className="flex items-center space-x-3">
+                <div className="relative h-14 w-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 p-0.5 shadow-md flex-shrink-0 overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
+                  <img
+                    src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEheWlYhKU2WoUqZnypbPj_mI1Jf4CH0isE5HhHcrIhTpSmNNx_FKtm3-eb9v2ETr_sIVz9RHjiIBlrT4BrV-N0L2BiyTtmVLMobgDXhTme1nmya3SPsTlyKw1RikzZydvun171ZZQ1V29yvZBhxz7XTFBJE-ewLD7XSkturQdem9OwScNqcVkEmXgiFVCA/s1024/IMG_1665.PNG"
+                    alt="Campus Ambassador Official Badge"
+                    className="h-full w-full object-cover rounded-[14px]"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-amber-950">
+                    Super Admin Mentorship Council
+                  </h4>
+                  <p className="text-[11px] text-amber-800">
+                    The Campus Ambassadors department receives direct executive mentorship and governance from all Super Admins.
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-slate-500 font-mono mt-0.5">
-                {activeDeptData.mentorId} • {activeDeptData.mentorEmail}
-              </p>
+            </div>
+
+            {/* Grid of All Super Admin Mentors */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+              {effectiveSuperAdminMentors.map((admin) => (
+                <div 
+                  key={String(admin.id || admin.forenclueId)}
+                  className="bg-white/90 border border-amber-200 rounded-xl p-3 flex items-center justify-between shadow-2xs hover:shadow-xs transition-all"
+                >
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <div className="h-9 w-9 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center text-xs shadow-2xs flex-shrink-0">
+                      {admin.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center space-x-1">
+                        <h5 className="text-xs font-bold text-slate-900 truncate">{admin.name}</h5>
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded border border-amber-200">
+                          Mentor
+                        </span>
+                      </div>
+                      <p className="text-[10px] font-mono text-amber-700 font-medium">
+                        {admin.forenclueId}
+                      </p>
+                      {admin.designation && (
+                        <p className="text-[9px] text-slate-500 truncate">
+                          {admin.designation}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <Link
+                    to={`/chat?directUser=${encodeURIComponent(admin.forenclueId)}`}
+                    className="p-1.5 bg-amber-50 hover:bg-amber-600 hover:text-white text-amber-700 rounded-lg transition-colors flex-shrink-0 cursor-pointer"
+                    title={`Message Super Admin Mentor ${admin.name}`}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              ))}
             </div>
           </div>
+        ) : (
+          /* Standard Single Lead Mentor Card */
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="h-10 w-10 rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center text-sm shadow-xs flex-shrink-0">
+                <Crown className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h4 className="text-sm font-bold text-slate-900">{activeDeptData.mentorName}</h4>
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full">
+                    Lead Mentor
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 font-mono mt-0.5">
+                  {activeDeptData.mentorId}
+                </p>
+              </div>
+            </div>
 
-          <Link
-            to={`/chat?directUser=${encodeURIComponent(activeDeptData.mentorId)}`}
-            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 shadow-2xs transition-colors cursor-pointer self-start sm:self-auto"
-          >
-            <Send className="h-3.5 w-3.5" />
-            <span>Open 1-on-1 Profile Chat</span>
-          </Link>
-        </div>
+            <Link
+              to={`/chat?directUser=${encodeURIComponent(activeDeptData.mentorId)}`}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 shadow-2xs transition-colors cursor-pointer self-start sm:self-auto"
+            >
+              <Send className="h-3.5 w-3.5" />
+              <span>Open 1-on-1 Profile Chat</span>
+            </Link>
+          </div>
+        )}
 
         {/* Member Search and List */}
         <div className="space-y-3 pt-2">
@@ -424,7 +612,7 @@ export const Teams = () => {
               <UserCheck className="h-8 w-8 text-slate-300 mx-auto mb-2" />
               <p className="text-xs font-bold text-slate-700">No members found in {selectedDept}</p>
               <p className="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
-                Members can be assigned to {selectedDept} via the Admin Console or during user registration.
+                Members and Campus Ambassadors can be assigned to {selectedDept} via the Admin Console.
               </p>
             </div>
           ) : (
@@ -432,10 +620,18 @@ export const Teams = () => {
               {activeDeptMembers.map((member) => (
                 <div 
                   key={member.id}
-                  className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 hover:shadow-xs transition-all flex items-start justify-between space-x-3"
+                  className={`p-4 rounded-xl border transition-all flex items-start justify-between space-x-3 ${
+                    member.role === 'CAMPUS_AMBASSADOR' || activeDeptData.name === 'Campus Ambassadors'
+                      ? 'border-amber-200/80 bg-gradient-to-br from-amber-50/30 via-white to-white hover:border-amber-300 hover:shadow-xs'
+                      : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-xs'
+                  }`}
                 >
                   <div className="flex items-start space-x-3 min-w-0">
-                    <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-700 font-bold flex items-center justify-center text-xs shadow-2xs flex-shrink-0">
+                    <div className={`h-10 w-10 rounded-xl font-bold flex items-center justify-center text-xs shadow-2xs flex-shrink-0 ${
+                      member.role === 'CAMPUS_AMBASSADOR' || activeDeptData.name === 'Campus Ambassadors'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-blue-50 text-blue-700'
+                    }`}>
                       {member.name.charAt(0)}
                     </div>
                     <div className="min-w-0">
@@ -444,12 +640,17 @@ export const Teams = () => {
                         <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
                           member.role === 'SUPER_ADMIN' 
                             ? 'bg-amber-50 text-amber-800 border-amber-200' 
-                            : member.role === 'MENTOR'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : 'bg-slate-50 text-slate-700 border-slate-200'
+                            : member.role === 'CAMPUS_AMBASSADOR'
+                              ? 'bg-amber-100 text-amber-900 border-amber-300'
+                              : member.role === 'MENTOR'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : 'bg-slate-50 text-slate-700 border-slate-200'
                         }`}>
                           {member.role.replace('_', ' ')}
                         </span>
+                        {member.forenclueId === user?.forenclueId && (
+                          <UserNetworkTag variant="compact" showWhenOnline={false} />
+                        )}
                       </div>
                       <p className="text-[11px] font-mono font-bold text-blue-600 mt-0.5">
                         {member.forenclueId}
@@ -457,11 +658,6 @@ export const Teams = () => {
                       {member.designation && (
                         <p className="text-[10px] text-slate-500 truncate mt-0.5">
                           {member.designation}
-                        </p>
-                      )}
-                      {member.email && (
-                        <p className="text-[10px] text-slate-400 truncate">
-                          {member.email}
                         </p>
                       )}
                     </div>

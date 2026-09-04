@@ -47,6 +47,10 @@ import {
   uploadWorkspaceFile,
   UploadResult
 } from '../lib/storageService';
+import {
+  TaskConfettiCelebration,
+  TaskCardCheckmark
+} from '../components/TaskConfettiCelebration';
 
 export interface WorkspaceTask {
   id: any;
@@ -102,6 +106,7 @@ export const DEPARTMENTS = [
   'Events & Management',
   'Cyber & Digital Forensics',
   'Creative & Graphics',
+  'Campus Ambassadors',
   'Executive & Administration'
 ];
 
@@ -116,6 +121,25 @@ interface UploadedFileItem {
 export const Tasks: React.FC = () => {
   const { user, token } = useAuthStore();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isAdmin = isSuperAdmin || user?.role === 'MENTOR';
+
+  // Celebration state for task completion animation
+  const [celebrationState, setCelebrationState] = useState<{ show: boolean; taskTitle: string }>({
+    show: false,
+    taskTitle: '',
+  });
+  const [celebratingTaskId, setCelebratingTaskId] = useState<string | null>(null);
+
+  const triggerCelebration = (taskId?: any, title?: string) => {
+    if (taskId) {
+      setCelebratingTaskId(String(taskId));
+      setTimeout(() => setCelebratingTaskId(null), 2500);
+    }
+    setCelebrationState({
+      show: true,
+      taskTitle: title || 'Task',
+    });
+  };
 
   const [tasks, setTasks] = useState<WorkspaceTask[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -319,11 +343,43 @@ export const Tasks: React.FC = () => {
     }
   };
 
+  // Toggle Task Completion status with celebration animation
+  const handleToggleComplete = async (task: WorkspaceTask) => {
+    if (!user) return;
+    try {
+      setActionLoading(true);
+      const isCurrentlyCompleted = task.status === 'COMPLETED' || task.status === 'SUBMITTED';
+      if (isCurrentlyCompleted) {
+        await updateFirestoreTask(task.id, {
+          status: 'IN_PROGRESS',
+          progress: 50,
+        });
+        showToast(`Task "${task.title}" reopened as In Progress.`);
+      } else {
+        await updateFirestoreTask(task.id, {
+          status: 'COMPLETED',
+          progress: 100,
+        });
+        triggerCelebration(task.id, task.title);
+        showToast(`Task "${task.title}" marked as complete!`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to update task status');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleUpdateProgress = async (task: WorkspaceTask, progress: number) => {
     if (!user) return;
     try {
       const updates: Partial<FirestoreTask> = { progress };
-      if (progress > 0 && task.status === 'TODO') {
+      if (progress === 100 && task.status !== 'COMPLETED') {
+        updates.status = 'COMPLETED';
+        triggerCelebration(task.id, task.title);
+        showToast(`Task "${task.title}" marked as complete!`);
+      } else if (progress > 0 && task.status === 'TODO') {
         updates.status = 'IN_PROGRESS';
       }
       await updateFirestoreTask(task.id, updates);
@@ -452,8 +508,10 @@ export const Tasks: React.FC = () => {
         }))
       );
 
+      const modalTask = showDeliverableModal;
       setShowDeliverableModal(null);
-      showToast('Deliverable & evidence files submitted successfully!');
+      triggerCelebration(modalTask.id, modalTask.title);
+      showToast('Deliverable & evidence files submitted successfully! Task marked as completed.');
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Failed to submit deliverable');
@@ -511,6 +569,13 @@ export const Tasks: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Framer Motion Confetti & Check-Mark Celebration */}
+      <TaskConfettiCelebration
+        show={celebrationState.show}
+        taskTitle={celebrationState.taskTitle}
+        onDismiss={() => setCelebrationState(prev => ({ ...prev, show: false }))}
+      />
+
       {/* Real-time Notification Toast */}
       {notificationToast.show && (
         <div className="fixed top-20 right-6 z-50 max-w-md bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center space-x-3 animate-in slide-in-from-top-4 duration-200">
@@ -717,14 +782,21 @@ export const Tasks: React.FC = () => {
             return (
               <div
                 key={task.id}
-                className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-2xs flex flex-col justify-between transition-all hover:shadow-md ${
-                  isCompleted 
-                    ? 'border-emerald-200 bg-emerald-50/10' 
-                    : isInProgress
-                      ? 'border-blue-200 ring-1 ring-blue-100'
-                      : 'border-slate-200 hover:border-blue-300'
+                className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-2xs flex flex-col justify-between transition-all hover:shadow-md relative overflow-hidden ${
+                  celebratingTaskId === String(task.id)
+                    ? 'border-emerald-400 ring-2 ring-emerald-300 shadow-md scale-[1.01]'
+                    : isCompleted 
+                      ? 'border-emerald-200 bg-emerald-50/15' 
+                      : isInProgress
+                        ? 'border-blue-200 ring-1 ring-blue-100'
+                        : 'border-slate-200 hover:border-blue-300'
                 }`}
               >
+                {/* Highlight celebration shimmer on completion */}
+                {celebratingTaskId === String(task.id) && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-400/20 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite] pointer-events-none" />
+                )}
+
                 <div>
                   {/* Top Bar of Card: Priority & Status */}
                   <div className="flex items-start justify-between gap-2 mb-3">
@@ -740,7 +812,7 @@ export const Tasks: React.FC = () => {
                       {task.priority} PRIORITY
                     </span>
 
-                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full transition-colors ${
                       isCompleted
                         ? 'bg-emerald-100 text-emerald-800'
                         : isInProgress
@@ -751,13 +823,27 @@ export const Tasks: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Title & Description */}
-                  <h3 className={`text-sm font-bold leading-snug ${isCompleted ? 'text-slate-700' : 'text-slate-900'}`}>
-                    {task.title}
-                  </h3>
-                  <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                    {task.description || 'No additional details provided.'}
-                  </p>
+                  {/* Title & Description with Interactive Checkmark */}
+                  <div className="flex items-start gap-3">
+                    <TaskCardCheckmark
+                      isCompleted={isCompleted}
+                      isCelebrating={celebratingTaskId === String(task.id)}
+                      disabled={!isAllottedWorker && !isSuperAdmin && !isAdmin}
+                      onToggle={() => handleToggleComplete(task)}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`text-sm font-bold leading-snug transition-all ${
+                        isCompleted ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-900'
+                      }`}>
+                        {task.title}
+                      </h3>
+                      <p className={`text-xs mt-1.5 leading-relaxed transition-colors ${
+                        isCompleted ? 'text-slate-400' : 'text-slate-600'
+                      }`}>
+                        {task.description || 'No additional details provided.'}
+                      </p>
+                    </div>
+                  </div>
 
                   {/* Reference Attachment Preview */}
                   {task.referenceAttachmentUrl && (
@@ -914,14 +1000,23 @@ export const Tasks: React.FC = () => {
                         )}
 
                         {isInProgress && (
-                          <button
-                            id={`btn-submit-deliverable-${task.id}`}
-                            onClick={() => handleOpenDeliverableModal(task)}
-                            className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center space-x-1.5 shadow-xs"
-                          >
-                            <Upload className="h-3.5 w-3.5" />
-                            <span>Submit & Complete</span>
-                          </button>
+                          <div className="flex items-center space-x-1.5 flex-1">
+                            <button
+                              id={`btn-submit-deliverable-${task.id}`}
+                              onClick={() => handleOpenDeliverableModal(task)}
+                              className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center space-x-1.5 shadow-xs"
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              <span>Submit & Complete</span>
+                            </button>
+                            <button
+                              onClick={() => handleToggleComplete(task)}
+                              className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl transition-all cursor-pointer border border-emerald-200/80"
+                              title="Quick mark complete with celebration"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         )}
 
                         {isCompleted && (
@@ -956,10 +1051,23 @@ export const Tasks: React.FC = () => {
                               <span>View Deliverable</span>
                             </button>
                           ) : (
-                            <span className="text-[11px] font-semibold text-slate-500 flex items-center space-x-1">
-                              <Clock className="h-3 w-3 text-slate-400" />
-                              <span>{isInProgress ? 'Member working...' : 'Awaiting start'}</span>
-                            </span>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-[11px] font-semibold text-slate-500 flex items-center space-x-1">
+                                <Clock className="h-3 w-3 text-slate-400" />
+                                <span>{isInProgress ? 'Member working...' : 'Awaiting start'}</span>
+                              </span>
+                              {(isSuperAdmin || isAdmin) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleComplete(task)}
+                                  className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center space-x-1 border border-emerald-200/80"
+                                  title="Mark complete with celebration"
+                                >
+                                  <Check className="h-3 w-3" />
+                                  <span>Complete</span>
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
 

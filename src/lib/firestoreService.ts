@@ -193,10 +193,10 @@ export const SEED_USERS: FirestoreUser[] = [
     email: 'mrunmayee.bodhe@forenclue.in',
     password: 'Forenclue@2026',
     role: 'SUPER_ADMIN',
-    department: 'Events & Management',
-    designation: 'Super Administrator & Events Lead',
+    department: 'Research',
+    designation: 'Super Administrator & Research Lead Mentor',
     phone: '+91 98765 43211',
-    bio: 'Executive Super Admin & Events Mentor at ForenClue Workspace.',
+    bio: 'Executive Super Admin & Research Lead Mentor at ForenClue Workspace.',
     isDefaultPassword: true,
     tempPasswordChanged: false,
     active: true,
@@ -214,23 +214,6 @@ export const SEED_USERS: FirestoreUser[] = [
     designation: 'Super Administrator & Case Study Lead Mentor',
     phone: '+91 98765 43212',
     bio: 'Executive Super Admin & Case Study Lead Mentor at ForenClue Workspace.',
-    isDefaultPassword: true,
-    tempPasswordChanged: false,
-    active: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_emp_004',
-    forenclueId: 'FC-EMP-2026-004',
-    name: 'Purva Bhawsar',
-    email: 'purva.bhawsar@forenclue.in',
-    password: 'Forenclue@2026',
-    role: 'SUPER_ADMIN',
-    department: 'Research',
-    designation: 'Super Administrator & Research Lead',
-    phone: '+91 98765 43213',
-    bio: 'Executive Super Admin & Research Mentor at ForenClue Workspace.',
     isDefaultPassword: true,
     tempPasswordChanged: false,
     active: true,
@@ -311,12 +294,29 @@ const SEED_DEFAULT_GROUPS: Omit<FirestoreChatGroup, 'id'>[] = [
 
 export async function ensureDefaultFirestoreSeed(): Promise<void> {
   try {
-    // 1. Remove deprecated / removed member FC-EMP-2026-005 (Ananya Sharma) if present in Firestore
+    // 1. Remove deprecated / removed members (user_emp_004: Purva Bhawsar, user_emp_005: Ananya Sharma) if present in Firestore
     try {
-      const deprecatedDocRef = doc(db, 'users', 'user_emp_005');
-      const depSnap = await getDoc(deprecatedDocRef);
-      if (depSnap.exists()) {
-        await deleteDoc(deprecatedDocRef);
+      const deprecatedIds = ['user_emp_004', 'user_emp_005'];
+      for (const depId of deprecatedIds) {
+        const deprecatedDocRef = doc(db, 'users', depId);
+        const depSnap = await getDoc(deprecatedDocRef);
+        if (depSnap.exists()) {
+          await deleteDoc(deprecatedDocRef);
+        }
+      }
+      
+      // Also cleanup any user doc with forenclueId FC-EMP-2026-004 or name Purva Bhawsar
+      const usersCol = collection(db, 'users');
+      const allUsersSnap = await getDocs(usersCol);
+      for (const userDoc of allUsersSnap.docs) {
+        const uData = userDoc.data();
+        if (
+          uData.forenclueId === 'FC-EMP-2026-004' ||
+          (uData.name && uData.name.toLowerCase().includes('purva bhawsar')) ||
+          (uData.email && uData.email.toLowerCase().includes('purva.bhawsar'))
+        ) {
+          await deleteDoc(doc(db, 'users', userDoc.id));
+        }
       }
     } catch (e) {
       console.warn('Deprecated user cleanup notice:', e);
@@ -345,6 +345,17 @@ export async function ensureDefaultFirestoreSeed(): Promise<void> {
                 role: 'SUPER_ADMIN',
                 department: 'Creative & Graphics',
                 designation: 'Founder & Lead Forensic Specialist | Creative & Graphics Lead Mentor'
+              });
+            }
+          }
+
+          // Enforce Research department for Mrunmayee Bodhe
+          if (u.id === 'user_emp_002' || u.forenclueId === 'FC-EMP-2026-002') {
+            if (existingData.department !== 'Research' || existingData.designation !== 'Super Administrator & Research Lead Mentor') {
+              await updateDoc(userDocRef, {
+                department: 'Research',
+                designation: 'Super Administrator & Research Lead Mentor',
+                bio: 'Executive Super Admin & Research Lead Mentor at ForenClue Workspace.'
               });
             }
           }
@@ -1538,9 +1549,9 @@ export const DEFAULT_SYSTEM_SETTINGS: FirestoreSystemSettings = {
       name: 'Research', 
       desc: 'Forensic sciences advancement, whitepapers, experimental evidence analysis, peer review workflows, and academic publications.', 
       code: 'RS', 
-      mentorName: 'Purva Bhawsar',
-      mentorId: 'FC-EMP-2026-004',
-      mentorEmail: 'purva.bhawsar@forenclue.in',
+      mentorName: 'Mrunmayee Bodhe',
+      mentorId: 'FC-EMP-2026-002',
+      mentorEmail: 'mrunmayee.bodhe@forenclue.in',
       color: 'bg-blue-600',
       badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
     },
@@ -1563,6 +1574,16 @@ export const DEFAULT_SYSTEM_SETTINGS: FirestoreSystemSettings = {
       mentorEmail: 'ttapse12@gmail.com',
       color: 'bg-indigo-600',
       badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+    },
+    { 
+      name: 'Campus Ambassadors', 
+      desc: 'National student outreach, university relations, forensic masterclass promotions, campus taskforces, and student community initiatives.', 
+      code: 'CA', 
+      mentorName: 'All Super Admins (Executive Council)',
+      mentorId: 'FC-EMP-2026-001',
+      mentorEmail: 'ttapse12@gmail.com',
+      color: 'bg-gradient-to-tr from-amber-500 via-amber-600 to-orange-600',
+      badgeColor: 'bg-amber-50 text-amber-900 border-amber-300'
     },
   ],
   updatedAt: new Date().toISOString(),

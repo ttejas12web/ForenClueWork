@@ -5,6 +5,7 @@ import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { subscribeToUserNotifications, markNotificationRead, markAllNotificationsRead, type FirestoreNotification } from '../lib/firestoreService';
 import { showDeviceNotification } from '../lib/pushNotifications';
+import { UserNetworkTag } from '../components/UserNetworkTag';
 
 interface TopBarProps {
   mobileMenuOpen: boolean;
@@ -284,18 +285,28 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
 
         <div className="h-6 w-px bg-slate-200 hidden sm:block" />
 
-        {/* User Profile Pill & Quick Sign Out */}
+        {/* User Profile Pill, Network Tag & Quick Sign Out */}
         <div className="flex items-center space-x-2">
+          {/* Offline / Online Network Tag for User */}
+          <UserNetworkTag variant="badge" showWhenOnline={false} className="hidden sm:inline-flex" />
+
           <Link
             to="/profile"
-            className="flex items-center space-x-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl hover:bg-slate-100 transition-all text-left"
+            className="flex items-center space-x-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl hover:bg-slate-100 transition-all text-left relative"
           >
-            <div className="h-8 w-8 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-              {user?.name?.charAt(0) || 'U'}
+            <div className="relative">
+              <div className="h-8 w-8 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+                {user?.name?.charAt(0) || 'U'}
+              </div>
+              <UserNetworkTag variant="dot" showWhenOnline={true} className="absolute -bottom-0.5 -right-0.5" />
             </div>
             <div className="hidden sm:block text-left">
-              <p className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[120px]">{user?.name}</p>
-              <p className="text-[10px] font-mono text-slate-400">{user?.forenclueId}</p>
+              <div className="flex items-center space-x-1.5">
+                <p className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[120px]">{user?.name}</p>
+              </div>
+              <div className="flex items-center space-x-1">
+                <p className="text-[10px] font-mono text-slate-400">{user?.forenclueId}</p>
+              </div>
             </div>
           </Link>
 

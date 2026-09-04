@@ -168,7 +168,8 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
       'Case Study',
       'Research',
       'Events & Management',
-      'Cyber & Digital Forensics'
+      'Cyber & Digital Forensics',
+      'Campus Ambassadors'
     ];
 
     const departmentStats = DEPARTMENTS.map(deptName => {

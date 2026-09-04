@@ -54,7 +54,8 @@ export const AdminConsole = () => {
     'Case Study',
     'Research',
     'Events & Management',
-    'Cyber & Digital Forensics'
+    'Cyber & Digital Forensics',
+    'Campus Ambassadors'
   ];
 
   useEffect(() => {
@@ -445,7 +446,7 @@ export const AdminConsole = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search name, email, department, or ForenClue ID..."
+                placeholder="Search name, department, or ForenClue ID..."
                 className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-2xs"
               />
             </div>
@@ -646,25 +647,53 @@ export const AdminConsole = () => {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
             {[
-              { name: 'Creative & Graphics', code: 'CD', color: 'bg-rose-600' },
-              { name: 'Case Study', code: 'CS', color: 'bg-emerald-600' },
-              { name: 'Research', code: 'RS', color: 'bg-blue-600' },
-              { name: 'Events & Management', code: 'EW', color: 'bg-purple-600' },
-              { name: 'Cyber & Digital Forensics', code: 'CF', color: 'bg-indigo-600' },
+              { name: 'Creative & Graphics', code: 'CD', color: 'bg-rose-600', mentor: 'Tejas Tapse' },
+              { name: 'Case Study', code: 'CS', color: 'bg-emerald-600', mentor: 'Ayush Gaikwad' },
+              { name: 'Research', code: 'RS', color: 'bg-blue-600', mentor: 'Mrunmayee Bodhe' },
+              { name: 'Events & Management', code: 'EW', color: 'bg-purple-600', mentor: 'Mrunmayee Bodhe' },
+              { name: 'Cyber & Digital Forensics', code: 'CF', color: 'bg-indigo-600', mentor: 'Tejas Tapse' },
+              { name: 'Campus Ambassadors', code: 'CA', color: 'bg-gradient-to-tr from-amber-500 via-amber-600 to-orange-600', mentor: 'All Super Admins (Council)', isSpecial: true },
             ].map((d) => {
-              const count = users.filter(u => u.department === d.name).length;
+              const count = users.filter(u => {
+                const userDept = (u.department || '').trim().toLowerCase();
+                if (d.name === 'Campus Ambassadors') {
+                  return userDept.includes('campus ambassador') || userDept.includes('ambassador') || u.role === 'CAMPUS_AMBASSADOR';
+                }
+                return userDept === d.name.toLowerCase();
+              }).length;
+
               return (
-                <div key={d.name} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                <div 
+                  key={d.name} 
+                  className={`p-3.5 rounded-xl border flex items-center justify-between transition-all ${
+                    (d as any).isSpecial 
+                      ? 'bg-gradient-to-r from-amber-50/70 via-white to-orange-50/40 border-amber-300 ring-1 ring-amber-400/20 shadow-2xs'
+                      : 'bg-slate-50/50 border-slate-200'
+                  }`}
+                >
                   <div className="flex items-center space-x-2.5">
-                    <div className={`h-8 w-8 rounded-lg ${d.color} text-white font-bold flex items-center justify-center text-xs`}>
+                    <div className={`h-8 w-8 rounded-lg ${d.color} text-white font-bold flex items-center justify-center text-xs shadow-2xs`}>
                       {d.code}
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-slate-900">{d.name}</h4>
-                      <p className="text-[10px] text-slate-400">Department Unit</p>
+                      <div className="flex items-center space-x-1.5">
+                        <h4 className="text-xs font-bold text-slate-900">{d.name}</h4>
+                        {(d as any).isSpecial && (
+                          <span className="text-[9px] bg-amber-200 text-amber-900 font-bold px-1.5 py-0.2 rounded-full">
+                            Council Mentored
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Mentor: <span className="font-semibold text-slate-600">{d.mentor}</span>
+                      </p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold bg-white px-2 py-0.5 rounded-full border border-slate-200 text-slate-700">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                    (d as any).isSpecial 
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                      : 'bg-white text-slate-700 border-slate-200'
+                  }`}>
                     {count} Members
                   </span>
                 </div>

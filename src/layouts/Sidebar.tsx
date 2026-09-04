@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { cn } from '../lib/utils';
+import { UserNetworkTag } from '../components/UserNetworkTag';
 import { 
   Home, 
   MessageSquare, 
@@ -104,7 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
           <div>
             <div className="flex items-center space-x-1.5">
               <span className="text-white font-bold text-base tracking-tight">ForenClue</span>
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" title="System Online" />
+              <UserNetworkTag variant="dot" showWhenOnline={true} />
             </div>
             <p className="text-[10px] text-slate-400 font-medium">Forensic Intelligence Portal</p>
           </div>
@@ -151,13 +152,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
       <div className="p-4 border-t border-slate-800/80 bg-slate-950/60">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2.5 min-w-0">
-            <div className="h-8 w-8 rounded-xl bg-blue-600/30 border border-blue-500/40 text-blue-300 font-bold flex items-center justify-center text-xs flex-shrink-0">
-              {user?.name?.charAt(0) || 'U'}
+            <div className="relative flex-shrink-0">
+              <div className="h-8 w-8 rounded-xl bg-blue-600/30 border border-blue-500/40 text-blue-300 font-bold flex items-center justify-center text-xs flex-shrink-0">
+                {user?.name?.charAt(0) || 'U'}
+              </div>
+              <UserNetworkTag variant="dot" showWhenOnline={true} className="absolute -bottom-0.5 -right-0.5" />
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold text-white truncate">{user?.name}</p>
-              <div className="flex items-center space-x-1.5">
+              <div className="flex items-center space-x-1.5 mt-0.5">
                 <span className="text-[10px] font-mono text-slate-400 truncate">{user?.forenclueId}</span>
+                <UserNetworkTag variant="compact" showWhenOnline={false} />
               </div>
             </div>
           </div>
