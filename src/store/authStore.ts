@@ -15,6 +15,18 @@ interface AuthState {
 
 function sanitizeAuthUser(u: User | null): User | null {
   if (!u) return null;
+  const name = (u.name || '').toLowerCase();
+  const email = (u.email || '').toLowerCase();
+  if (
+    u.id === 'user_emp_004' ||
+    u.forenclueId === 'FC-EMP-2026-004' ||
+    name.includes('purva') ||
+    name.includes('bhawsar') ||
+    name.includes('hawser') ||
+    email.includes('purva')
+  ) {
+    return null;
+  }
   if (
     u.forenclueId === 'FC-EMP-2026-001' ||
     u.email?.toLowerCase() === 'ttapse12@gmail.com' ||

@@ -256,6 +256,16 @@ export const SEED_USERS: FirestoreUser[] = [
   }
 ];
 
+export function isPurvaUser(u: { id?: string; forenclueId?: string; name?: string; email?: string } | null | undefined): boolean {
+  if (!u) return false;
+  if (u.id === 'user_emp_004' || u.forenclueId === 'FC-EMP-2026-004') return true;
+  const name = (u.name || '').toLowerCase();
+  const email = (u.email || '').toLowerCase();
+  if (name.includes('purva') || name.includes('bhawsar') || name.includes('hawser')) return true;
+  if (email.includes('purva') || email.includes('bhawsar') || email.includes('hawser')) return true;
+  return false;
+}
+
 const SEED_DEFAULT_GROUPS: Omit<FirestoreChatGroup, 'id'>[] = [
   {
     name: 'General Workspace',
@@ -264,7 +274,7 @@ const SEED_DEFAULT_GROUPS: Omit<FirestoreChatGroup, 'id'>[] = [
     isDirect: false,
     createdBy: 'user_admin_001',
     createdAt: new Date().toISOString(),
-    memberIds: ['user_admin_001', 'user_emp_002', 'user_emp_003', 'user_emp_004'],
+    memberIds: ['user_admin_001', 'user_emp_002', 'user_emp_003'],
     lastMessageText: '',
     lastMessageAt: new Date().toISOString(),
   },
@@ -294,7 +304,8 @@ const SEED_DEFAULT_GROUPS: Omit<FirestoreChatGroup, 'id'>[] = [
 
 export async function ensureDefaultFirestoreSeed(): Promise<void> {
   try {
-    // 1. Remove deprecated / removed members (user_emp_004: Purva Bhawsar, user_emp_005: Ananya Sharma) if present in Firestore
+    // 1. Remove deprecated / removed members (Purva Bhawsar/Hawser, user_emp_004, user_emp_005) from all collections
+    const purvaDocIds = new Set<string>(['user_emp_004', 'FC-EMP-2026-004']);
     try {
       const deprecatedIds = ['user_emp_004', 'user_emp_005'];
       for (const depId of deprecatedIds) {
@@ -302,24 +313,73 @@ export async function ensureDefaultFirestoreSeed(): Promise<void> {
         const depSnap = await getDoc(deprecatedDocRef);
         if (depSnap.exists()) {
           await deleteDoc(deprecatedDocRef);
+          purvaDocIds.add(depId);
         }
       }
       
-      // Also cleanup any user doc with forenclueId FC-EMP-2026-004 or name Purva Bhawsar
+      // Cleanup any user doc matching Purva
       const usersCol = collection(db, 'users');
       const allUsersSnap = await getDocs(usersCol);
       for (const userDoc of allUsersSnap.docs) {
-        const uData = userDoc.data();
+        const uData = userDoc.data() as any;
         if (
+          userDoc.id === 'user_emp_004' ||
+          userDoc.id === 'user_emp_005' ||
           uData.forenclueId === 'FC-EMP-2026-004' ||
-          (uData.name && uData.name.toLowerCase().includes('purva bhawsar')) ||
-          (uData.email && uData.email.toLowerCase().includes('purva.bhawsar'))
+          uData.forenclueId === 'FC-EMP-2026-005' ||
+          isPurvaUser({ ...uData, id: userDoc.id })
         ) {
+          purvaDocIds.add(userDoc.id);
+          if (uData.forenclueId) purvaDocIds.add(uData.forenclueId);
           await deleteDoc(doc(db, 'users', userDoc.id));
         }
       }
+
+      // Cleanup chat groups: remove Purva from memberIds or delete direct chat
+      const groupsCol = collection(db, 'chat_groups');
+      const allGroupsSnap = await getDocs(groupsCol);
+      for (const grpDoc of allGroupsSnap.docs) {
+        const gData = grpDoc.data() as FirestoreChatGroup;
+        const gName = (gData.name || '').toLowerCase();
+        const hasPurvaMember = Array.isArray(gData.memberIds) && gData.memberIds.some((id: string) => purvaDocIds.has(id) || id === 'user_emp_004' || id === 'FC-EMP-2026-004');
+        const isPurvaDirect = gData.isDirect && (hasPurvaMember || gName.includes('purva') || gName.includes('bhawsar') || gName.includes('hawser'));
+        
+        if (isPurvaDirect) {
+          await deleteDoc(doc(db, 'chat_groups', grpDoc.id));
+        } else if (hasPurvaMember) {
+          const cleanedMembers = gData.memberIds.filter((id: string) => !purvaDocIds.has(id) && id !== 'user_emp_004' && id !== 'FC-EMP-2026-004');
+          await updateDoc(doc(db, 'chat_groups', grpDoc.id), {
+            memberIds: cleanedMembers
+          });
+        }
+      }
+
+      // Cleanup tasks: if assigned to or referencing Purva, reassign to Tejas Tapse
+      const tasksCol = collection(db, 'tasks');
+      const allTasksSnap = await getDocs(tasksCol);
+      for (const taskDoc of allTasksSnap.docs) {
+        const tData = taskDoc.data() as any;
+        const assignedName = (tData.assignedUserName || '').toLowerCase();
+        const assignedEmail = (tData.assignedUserEmail || '').toLowerCase();
+        const isAssignedToPurva = 
+          purvaDocIds.has(tData.assignedTo) ||
+          tData.assignedTo === 'user_emp_004' ||
+          tData.assignedTo === 'FC-EMP-2026-004' ||
+          assignedName.includes('purva') ||
+          assignedName.includes('bhawsar') ||
+          assignedName.includes('hawser') ||
+          assignedEmail.includes('purva');
+
+        if (isAssignedToPurva) {
+          await updateDoc(doc(db, 'tasks', taskDoc.id), {
+            assignedTo: 'user_admin_001',
+            assignedUserName: 'Tejas Tapse',
+            assignedUserEmail: 'ttapse12@gmail.com'
+          });
+        }
+      }
     } catch (e) {
-      console.warn('Deprecated user cleanup notice:', e);
+      console.warn('Deprecated user and workspace cleanup notice:', e);
     }
 
     for (const u of SEED_USERS) {
@@ -405,44 +465,54 @@ export async function ensureDefaultFirestoreSeed(): Promise<void> {
 export function findMatchingUser(users: FirestoreUser[], identifier: string): FirestoreUser | null {
   const cleanIdent = (identifier || '').trim().toLowerCase();
   if (!cleanIdent) return null;
+  if (
+    cleanIdent.includes('purva') ||
+    cleanIdent.includes('bhawsar') ||
+    cleanIdent.includes('hawser') ||
+    cleanIdent === 'fc-emp-2026-004' ||
+    cleanIdent === 'user_emp_004'
+  ) {
+    return null;
+  }
+  const filteredUsers = users.filter(u => !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
   const alphaNum = cleanIdent.replace(/[^a-z0-9]/g, '');
 
   // Tier 1: Exact ForenClue ID match (case-insensitive)
-  const exactFcId = users.find(u => (u.forenclueId || '').trim().toLowerCase() === cleanIdent);
+  const exactFcId = filteredUsers.find(u => (u.forenclueId || '').trim().toLowerCase() === cleanIdent);
   if (exactFcId) return exactFcId;
 
   // Tier 2: Exact Email match (case-insensitive)
-  const exactEmail = users.find(u => (u.email || '').trim().toLowerCase() === cleanIdent);
+  const exactEmail = filteredUsers.find(u => (u.email || '').trim().toLowerCase() === cleanIdent);
   if (exactEmail) return exactEmail;
 
   // Tier 3: Exact Document ID match
-  const exactDocId = users.find(u => (u.id || '').trim().toLowerCase() === cleanIdent);
+  const exactDocId = filteredUsers.find(u => (u.id || '').trim().toLowerCase() === cleanIdent);
   if (exactDocId) return exactDocId;
 
   // Tier 4: Exact alphanumeric normalized ForenClue ID match
   // e.g. "fcemp2026001" strictly matches "FC-EMP-2026-001" and NEVER matches "FC-VOL-2026-001"
   if (alphaNum.length >= 4) {
-    const alphaFcId = users.find(u => (u.forenclueId || '').toLowerCase().replace(/[^a-z0-9]/g, '') === alphaNum);
+    const alphaFcId = filteredUsers.find(u => (u.forenclueId || '').toLowerCase().replace(/[^a-z0-9]/g, '') === alphaNum);
     if (alphaFcId) return alphaFcId;
   }
 
   // Tier 5: Exact Full Name match (case-insensitive)
-  const exactName = users.find(u => (u.name || '').trim().toLowerCase() === cleanIdent);
+  const exactName = filteredUsers.find(u => (u.name || '').trim().toLowerCase() === cleanIdent);
   if (exactName) return exactName;
 
   // Tier 6: Email Username / Local-part match
   if (cleanIdent.includes('@')) {
     const localPart = cleanIdent.split('@')[0];
-    const emailPrefixMatch = users.find(u => (u.email || '').toLowerCase().split('@')[0] === localPart);
+    const emailPrefixMatch = filteredUsers.find(u => (u.email || '').toLowerCase().split('@')[0] === localPart);
     if (emailPrefixMatch) return emailPrefixMatch;
   } else {
-    const emailPrefixMatch = users.find(u => (u.email || '').toLowerCase().split('@')[0] === cleanIdent);
+    const emailPrefixMatch = filteredUsers.find(u => (u.email || '').toLowerCase().split('@')[0] === cleanIdent);
     if (emailPrefixMatch) return emailPrefixMatch;
   }
 
   // Tier 7: Super Admin shorthand (admin, superadmin, founder)
   if (['admin', 'superadmin', 'super-admin', 'founder'].includes(cleanIdent)) {
-    const superAdmin = users.find(u => u.forenclueId === 'FC-EMP-2026-001') || users.find(u => u.role === 'SUPER_ADMIN');
+    const superAdmin = filteredUsers.find(u => u.forenclueId === 'FC-EMP-2026-001') || filteredUsers.find(u => u.role === 'SUPER_ADMIN');
     if (superAdmin) return superAdmin;
   }
 
@@ -450,7 +520,7 @@ export function findMatchingUser(users: FirestoreUser[], identifier: string): Fi
   if (alphaNum.startsWith('emp') || alphaNum.startsWith('fcemp')) {
     const digits = alphaNum.replace(/\D/g, '');
     if (digits) {
-      const matchEmp = users.find(u => {
+      const matchEmp = filteredUsers.find(u => {
         const uFc = (u.forenclueId || '').toUpperCase();
         return uFc.includes('EMP') && uFc.replace(/\D/g, '').endsWith(digits);
       });
@@ -461,7 +531,7 @@ export function findMatchingUser(users: FirestoreUser[], identifier: string): Fi
   if (alphaNum.startsWith('vol') || alphaNum.startsWith('fcvol')) {
     const digits = alphaNum.replace(/\D/g, '');
     if (digits) {
-      const matchVol = users.find(u => {
+      const matchVol = filteredUsers.find(u => {
         const uFc = (u.forenclueId || '').toUpperCase();
         return uFc.includes('VOL') && uFc.replace(/\D/g, '').endsWith(digits);
       });
@@ -483,6 +553,16 @@ export async function authenticateWithFirestore(identifier: string, passwordAtte
     throw new Error('Please enter your password.');
   }
 
+  if (
+    cleanIdent.includes('purva') ||
+    cleanIdent.includes('bhawsar') ||
+    cleanIdent.includes('hawser') ||
+    cleanIdent === 'fc-emp-2026-004' ||
+    cleanIdent === 'user_emp_004'
+  ) {
+    throw new Error('This user account is no longer active in the ForenClue workspace.');
+  }
+
   // Ensure initial seed data exists
   await ensureDefaultFirestoreSeed().catch(() => {});
 
@@ -495,7 +575,9 @@ export async function authenticateWithFirestore(identifier: string, passwordAtte
     
     querySnap.forEach((d) => {
       const data = d.data() as FirestoreUser;
-      firestoreUsers.push({ ...data, id: d.id });
+      if (!isPurvaUser({ ...data, id: d.id })) {
+        firestoreUsers.push({ ...data, id: d.id });
+      }
     });
 
     targetUser = findMatchingUser(firestoreUsers, identifier);
@@ -517,7 +599,7 @@ export async function authenticateWithFirestore(identifier: string, passwordAtte
     }
   }
 
-  if (!targetUser) {
+  if (!targetUser || isPurvaUser(targetUser)) {
     throw new Error('Invalid Employee ID or Email. Please check your credentials or contact your administrator.');
   }
 
@@ -642,14 +724,14 @@ export async function fetchAllUsers(): Promise<FirestoreUser[]> {
       const freshSnap = await getDocs(usersCol);
       return freshSnap.docs
         .map(d => normalizeUserRecord({ ...d.data(), id: d.id } as FirestoreUser))
-        .filter(u => u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
+        .filter(u => !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
     }
     return snap.docs
       .map(d => {
         const { password: _, ...rest } = d.data() as FirestoreUser;
         return normalizeUserRecord({ ...rest, id: d.id } as FirestoreUser);
       })
-      .filter(u => u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
+      .filter(u => !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'users');
     return [];
@@ -664,7 +746,7 @@ export function subscribeToUsers(callback: (users: FirestoreUser[]) => void): Un
         const { password: _, ...rest } = d.data() as FirestoreUser;
         return normalizeUserRecord({ ...rest, id: d.id } as FirestoreUser);
       })
-      .filter(u => u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
+      .filter(u => !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
     callback(usersList);
   }, (error) => {
     handleFirestoreError(error, OperationType.LIST, 'users');

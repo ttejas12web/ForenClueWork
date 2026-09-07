@@ -176,7 +176,12 @@ export const Teams = () => {
     };
   }, [token]);
 
-  const superAdminMentors = members.filter(m => m.role === 'SUPER_ADMIN' && m.active !== false);
+  const superAdminMentors = members.filter(m => {
+    if (!m || m.role !== 'SUPER_ADMIN' || m.active === false) return false;
+    const nameLower = (m.name || '').toLowerCase();
+    if (nameLower.includes('purva') || nameLower.includes('bhawsar') || nameLower.includes('hawser') || m.forenclueId === 'FC-EMP-2026-004' || m.id === 'user_emp_004') return false;
+    return true;
+  });
   const effectiveSuperAdminMentors = superAdminMentors.length > 0 ? superAdminMentors : [
     {
       id: 'emp_001',
@@ -196,6 +201,8 @@ export const Teams = () => {
 
     return members.filter(m => {
       if (!m || !m.name) return false;
+      const nameLower = (m.name || '').toLowerCase();
+      if (nameLower.includes('purva') || nameLower.includes('bhawsar') || nameLower.includes('hawser') || m.forenclueId === 'FC-EMP-2026-004' || m.id === 'user_emp_004') return false;
       const memId = String(m.forenclueId || m.id || m.email);
       if (seen.has(memId)) return false;
 
@@ -308,16 +315,6 @@ export const Teams = () => {
                     : 'bg-white border-slate-200 hover:border-slate-300'
               }`}
             >
-              {/* Special Campus Ambassadors Ribbon */}
-              {isSpecialDept && (
-                <div className="mb-3">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white text-[10px] font-extrabold uppercase tracking-wider shadow-2xs">
-                    <Sparkles className="h-3 w-3 text-amber-200 animate-pulse" />
-                    All Super Admins Mentorship
-                  </span>
-                </div>
-              )}
-
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className={`h-11 w-11 ${dept.color} text-white rounded-xl flex items-center justify-center font-bold text-sm shadow-xs`}>
