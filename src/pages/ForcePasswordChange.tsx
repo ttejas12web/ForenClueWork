@@ -83,7 +83,7 @@ export const ForcePasswordChange = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-900 px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-6 bg-white p-6 sm:p-8 rounded-3xl shadow-2xl border border-slate-100">
         {/* Header Badge */}
         <div className="flex flex-col items-center text-center">

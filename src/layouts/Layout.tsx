@@ -87,7 +87,7 @@ export const Layout = () => {
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100/90 text-slate-900 antialiased font-sans">
+    <div className="flex h-[100dvh] overflow-hidden bg-slate-100/90 text-slate-900 antialiased font-sans">
       {/* Desktop Sidebar */}
       <Sidebar 
         mobileMenuOpen={mobileMenuOpen} 
@@ -106,37 +106,39 @@ export const Layout = () => {
         />
 
         {/* Page Viewport */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 pb-20 md:pb-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">
           <div className="max-w-7xl mx-auto w-full">
             <Outlet />
           </div>
         </main>
 
         {/* Mobile Bottom Quick Navigation Bar (Visible on mobile screens < 768px) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-2 flex items-center justify-around z-30 shadow-lg">
-          {mobileNavItems.map((item) => {
-            const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                className={cn(
-                  "flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl transition-all duration-150 min-h-[44px]",
-                  isActive
-                    ? "text-blue-600 font-bold"
-                    : "text-slate-500 hover:text-slate-800"
-                )}
-              >
-                <div className={cn(
-                  "p-1 rounded-lg transition-colors",
-                  isActive ? "bg-blue-50 text-blue-600" : ""
-                )}>
-                  <item.icon className="h-5 w-5" />
-                </div>
-                <span className="text-[10px] tracking-tight mt-0.5">{item.name}</span>
-              </Link>
-            );
-          })}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-2 pb-[env(safe-area-inset-bottom)] flex items-center justify-around z-30 shadow-lg">
+          <div className="flex items-center justify-around w-full h-16">
+            {mobileNavItems.map((item) => {
+              const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+              return (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={cn(
+                    "flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl transition-all duration-150 min-h-[44px]",
+                    isActive
+                      ? "text-blue-600 font-bold"
+                      : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  <div className={cn(
+                    "p-1 rounded-lg transition-colors",
+                    isActive ? "bg-blue-50 text-blue-600" : ""
+                  )}>
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <span className="text-[10px] tracking-tight mt-0.5">{item.name}</span>
+                </Link>
+              );
+            })}
+          </div>
         </nav>
       </div>
       <PwaInstallPrompt />

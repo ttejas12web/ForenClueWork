@@ -881,7 +881,7 @@ export const Chat = () => {
   });
 
   return (
-    <div className="h-[calc(100vh-8.5rem)] sm:h-[calc(100vh-7rem)] bg-white rounded-2xl shadow-sm border border-slate-200/90 overflow-hidden flex flex-col md:flex-row relative">
+    <div className="h-[calc(100dvh-11rem)] sm:h-[calc(100dvh-8rem)] bg-white rounded-2xl shadow-sm border border-slate-200/90 overflow-hidden flex flex-col md:flex-row relative">
       
       {/* ================= COLUMN 1: GROUPS SIDEBAR ================= */}
       {/* On mobile: Hidden when an active group is selected. Visible when no active group. */}

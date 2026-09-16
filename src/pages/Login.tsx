@@ -33,7 +33,7 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-8 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-900 px-4 py-8 sm:px-6 lg:px-8 relative overflow-hidden">
       
       {/* Desktop Background Animations */}
       <div className="hidden lg:block absolute inset-0 pointer-events-none">

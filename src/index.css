@@ -33,3 +33,19 @@
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+
+/* Mobile Optimizations */
+@media screen and (max-width: 768px) {
+  /* Prevent iOS input zoom on focus */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Environment Safe Area Insets for PWAs / Mobile */
+html {
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}

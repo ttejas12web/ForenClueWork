@@ -53,7 +53,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white selection:bg-blue-500/30">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-slate-900 text-white selection:bg-blue-500/30">
         <div className="relative animate-pulse mb-8">
           <div className="absolute inset-0 bg-blue-500 rounded-3xl blur-xl opacity-20"></div>
           <img src="/app-icon.png" alt="ForenClue Logo" className="h-24 w-24 rounded-3xl shadow-2xl relative z-10 border border-slate-700/50" />
