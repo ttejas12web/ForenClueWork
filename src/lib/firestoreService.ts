@@ -1558,10 +1558,19 @@ export async function saveFirestorePushSubscription(subscription: any, userInfo?
 export async function removeFirestorePushSubscription(endpoint: string): Promise<void> {
   try {
     if (!endpoint) return;
-    const safeDocId = btoa(endpoint).replace(/[/+=]/g, '_').slice(-60);
-    await deleteDoc(doc(db, 'push_subscriptions', safeDocId));
+    try {
+      const safeDocId = btoa(endpoint).replace(/[/+=]/g, '_').slice(-60);
+      await deleteDoc(doc(db, 'push_subscriptions', safeDocId));
+    } catch {}
+    try {
+      const q = query(collection(db, 'push_subscriptions'), where('endpoint', '==', endpoint));
+      const snap = await getDocs(q);
+      for (const d of snap.docs) {
+        await deleteDoc(d.ref);
+      }
+    } catch {}
   } catch (err) {
-    console.warn('Firestore push subscription removal warning:', err);
+    // Silent ignore on client cleanup
   }
 }
 

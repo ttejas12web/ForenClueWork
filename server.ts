@@ -48,7 +48,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 import { initializeApp, getApps } from 'firebase/app';
-import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc, query, where } from 'firebase/firestore';
 
 // ----------------------------------------------------
 // WEB PUSH & BACKGROUND NOTIFICATIONS
@@ -60,7 +60,7 @@ const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:contact@forenclue.in';
 try {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 } catch (error) {
-  console.error('VAPID setup warning:', error);
+  console.info('VAPID setup notice:', error);
 }
 
 // Server Firebase instance for background Firestore subscriptions
@@ -73,10 +73,11 @@ try {
     serverFirestoreDb = initializeFirestore(sApp, {}, rawConfig.firestoreDatabaseId || undefined);
   }
 } catch (fbInitErr) {
-  console.warn('Server Firestore initialization notice:', fbInitErr);
+  console.info('Server Firestore initialization notice:', fbInitErr);
 }
 
 interface PushSubscriptionRecord {
+  docId?: string;
   endpoint: string;
   keys: {
     p256dh: string;
@@ -92,6 +93,29 @@ interface PushSubscriptionRecord {
 }
 
 const pushSubscriptions = new Map<string, PushSubscriptionRecord>();
+
+async function removePushSubscription(endpoint: string, docId?: string): Promise<void> {
+  if (!endpoint) return;
+  pushSubscriptions.delete(endpoint);
+  if (serverFirestoreDb) {
+    if (docId) {
+      try {
+        await deleteDoc(doc(serverFirestoreDb, 'push_subscriptions', docId));
+      } catch {}
+    }
+    try {
+      const safeDocId = Buffer.from(endpoint).toString('base64').replace(/[/+=]/g, '_').slice(-60);
+      await deleteDoc(doc(serverFirestoreDb, 'push_subscriptions', safeDocId));
+    } catch {}
+    try {
+      const q = query(collection(serverFirestoreDb, 'push_subscriptions'), where('endpoint', '==', endpoint));
+      const snap = await getDocs(q);
+      for (const d of snap.docs) {
+        await deleteDoc(d.ref);
+      }
+    } catch {}
+  }
+}
 
 async function getAllPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
   const subsMap = new Map<string, PushSubscriptionRecord>();
@@ -109,6 +133,7 @@ async function getAllPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
         const data = docSnap.data() as any;
         if (data && data.endpoint && data.keys && data.keys.p256dh && data.keys.auth) {
           const rec: PushSubscriptionRecord = {
+            docId: docSnap.id,
             endpoint: data.endpoint,
             keys: data.keys,
             userId: data.userId ? String(data.userId) : undefined,
@@ -124,7 +149,7 @@ async function getAllPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
         }
       });
     } catch (err) {
-      console.warn('Could not read push_subscriptions from Firestore:', err);
+      console.info('Could not read push_subscriptions from Firestore:', err);
     }
   }
 
@@ -193,13 +218,7 @@ app.post('/api/push/unsubscribe', async (req, res) => {
   try {
     const { endpoint } = req.body;
     if (endpoint) {
-      pushSubscriptions.delete(endpoint);
-      if (serverFirestoreDb) {
-        try {
-          const safeDocId = Buffer.from(endpoint).toString('base64').replace(/[/+=]/g, '_').slice(-60);
-          await deleteDoc(doc(serverFirestoreDb, 'push_subscriptions', safeDocId));
-        } catch {}
-      }
+      await removePushSubscription(endpoint);
     }
     res.json({ success: true });
   } catch (error) {
@@ -259,15 +278,10 @@ app.post('/api/push/test', async (req, res) => {
           sent++;
         } catch (err: any) {
           failed++;
-          console.warn('Push delivery error for endpoint:', sub.endpoint.substring(0, 40), err.statusCode, err.message);
-          if (err.statusCode === 404 || err.statusCode === 410) {
-            pushSubscriptions.delete(sub.endpoint);
-            if (serverFirestoreDb) {
-              try {
-                const safeDocId = Buffer.from(sub.endpoint).toString('base64').replace(/[/+=]/g, '_').slice(-60);
-                await deleteDoc(doc(serverFirestoreDb, 'push_subscriptions', safeDocId));
-              } catch {}
-            }
+          const isExpired = err.statusCode === 404 || err.statusCode === 410 || err.statusCode === 400;
+          if (isExpired) {
+            // Subscription expired or uninstalled on client device. Prune quietly.
+            await removePushSubscription(sub.endpoint, sub.docId);
           }
         }
       })
@@ -335,15 +349,10 @@ app.post('/api/push/send', async (req, res) => {
           sent++;
         } catch (err: any) {
           failed++;
-          console.warn('Push delivery failed for endpoint:', sub.endpoint.substring(0, 40), err.statusCode, err.message);
-          if (err.statusCode === 404 || err.statusCode === 410) {
-            pushSubscriptions.delete(sub.endpoint);
-            if (serverFirestoreDb) {
-              try {
-                const safeDocId = Buffer.from(sub.endpoint).toString('base64').replace(/[/+=]/g, '_').slice(-60);
-                await deleteDoc(doc(serverFirestoreDb, 'push_subscriptions', safeDocId));
-              } catch {}
-            }
+          const isExpired = err.statusCode === 404 || err.statusCode === 410 || err.statusCode === 400;
+          if (isExpired) {
+            // Subscription expired or uninstalled on client device. Prune quietly.
+            await removePushSubscription(sub.endpoint, sub.docId);
           }
         }
       })
