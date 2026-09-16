@@ -47,6 +47,24 @@
         "deliverableLink": { "type": "string", "maxLength": 1000 },
         "deliverableAttachmentUrl": { "type": "string", "maxLength": 1000 },
         "submittedAt": { "type": "string" },
+        "extensionRequest": {
+          "type": "object",
+          "description": "Deadline extension request details",
+          "properties": {
+            "requestedDueDate": { "type": "string" },
+            "reason": { "type": "string" },
+            "requestedAt": { "type": "string" },
+            "requestedBy": { "type": "string" },
+            "requestedByName": { "type": "string" },
+            "requestedByForenclueId": { "type": "string" },
+            "previousDueDate": { "type": "string" },
+            "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+            "reviewedAt": { "type": "string" },
+            "reviewedBy": { "type": "string" },
+            "reviewedByName": { "type": "string" },
+            "reviewNote": { "type": "string" }
+          }
+        },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },

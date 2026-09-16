@@ -74,8 +74,24 @@ export interface FirestoreTask {
     uploadedAt?: string;
   }>;
   submittedAt?: string | null;
+  extensionRequest?: TaskExtensionRequest | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TaskExtensionRequest {
+  requestedDueDate: string;
+  reason: string;
+  requestedAt: string;
+  requestedBy: string;
+  requestedByName?: string;
+  requestedByForenclueId?: string;
+  previousDueDate?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  reviewNote?: string;
 }
 
 export interface FirestoreChatGroup {
@@ -955,6 +971,184 @@ export async function deleteFirestoreTask(taskId: string): Promise<void> {
     await deleteDoc(doc(db, 'tasks', taskId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `tasks/${taskId}`);
+    throw error;
+  }
+}
+
+export async function requestTaskExtension(
+  taskId: string,
+  requestedDueDate: string,
+  reason: string,
+  user: { id: string; name: string; forenclueId?: string }
+): Promise<void> {
+  try {
+    const taskDocRef = doc(db, 'tasks', taskId);
+    const snap = await getDoc(taskDocRef);
+    if (!snap.exists()) {
+      throw new Error('Task not found');
+    }
+    const taskData = snap.data() as FirestoreTask;
+
+    const extensionReq: TaskExtensionRequest = {
+      requestedDueDate,
+      reason: reason.trim(),
+      requestedAt: new Date().toISOString(),
+      requestedBy: user.id,
+      requestedByName: user.name,
+      requestedByForenclueId: user.forenclueId || '',
+      previousDueDate: taskData.dueDate || 'Standard',
+      status: 'PENDING'
+    };
+
+    await updateDoc(taskDocRef, {
+      extensionRequest: extensionReq,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Notify Super Admin / Creator
+    const adminRecipients = new Set<string>();
+    if (taskData.createdBy) {
+      adminRecipients.add(taskData.createdBy);
+    }
+    // Also add root super admin
+    adminRecipients.add('user_admin_001');
+
+    for (const adminId of adminRecipients) {
+      if (adminId !== user.id) {
+        await createNotification({
+          userId: adminId,
+          title: 'Deadline Extension Requested',
+          message: `${user.name} requested an extension for "${taskData.title}" to ${requestedDueDate}.`,
+          type: 'TASK',
+          link: '/tasks'
+        }).catch(console.error);
+      }
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
+    throw error;
+  }
+}
+
+export async function approveTaskExtension(
+  taskId: string,
+  adminUser: { id: string; name: string },
+  approvalNote?: string
+): Promise<void> {
+  try {
+    const taskDocRef = doc(db, 'tasks', taskId);
+    const snap = await getDoc(taskDocRef);
+    if (!snap.exists()) {
+      throw new Error('Task not found');
+    }
+    const taskData = snap.data() as FirestoreTask;
+    if (!taskData.extensionRequest) {
+      throw new Error('No pending extension request found for this task');
+    }
+
+    const newDueDate = taskData.extensionRequest.requestedDueDate;
+    const updatedRequest: TaskExtensionRequest = {
+      ...taskData.extensionRequest,
+      status: 'APPROVED',
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: adminUser.id,
+      reviewedByName: adminUser.name,
+      reviewNote: approvalNote || 'Approved by Super Admin'
+    };
+
+    await updateDoc(taskDocRef, {
+      dueDate: newDueDate,
+      extensionRequest: updatedRequest,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Notify member
+    const memberRecipient = taskData.extensionRequest.requestedBy || taskData.assignedTo;
+    if (memberRecipient) {
+      await createNotification({
+        userId: memberRecipient,
+        title: 'Extension Request Approved',
+        message: `Your deadline extension for "${taskData.title}" was approved by ${adminUser.name}. New deadline: ${newDueDate}.`,
+        type: 'TASK',
+        link: '/tasks'
+      }).catch(console.error);
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
+    throw error;
+  }
+}
+
+export async function disapproveTaskExtension(
+  taskId: string,
+  adminUser: { id: string; name: string },
+  disapprovalReason?: string
+): Promise<void> {
+  try {
+    const taskDocRef = doc(db, 'tasks', taskId);
+    const snap = await getDoc(taskDocRef);
+    if (!snap.exists()) {
+      throw new Error('Task not found');
+    }
+    const taskData = snap.data() as FirestoreTask;
+    if (!taskData.extensionRequest) {
+      throw new Error('No pending extension request found for this task');
+    }
+
+    const updatedRequest: TaskExtensionRequest = {
+      ...taskData.extensionRequest,
+      status: 'REJECTED',
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: adminUser.id,
+      reviewedByName: adminUser.name,
+      reviewNote: disapprovalReason || 'Disapproved by Super Admin'
+    };
+
+    await updateDoc(taskDocRef, {
+      extensionRequest: updatedRequest,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Notify member
+    const memberRecipient = taskData.extensionRequest.requestedBy || taskData.assignedTo;
+    if (memberRecipient) {
+      await createNotification({
+        userId: memberRecipient,
+        title: 'Extension Request Disapproved',
+        message: `Your deadline extension for "${taskData.title}" was not approved${disapprovalReason ? `: "${disapprovalReason}"` : '.'}`,
+        type: 'TASK',
+        link: '/tasks'
+      }).catch(console.error);
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
+    throw error;
+  }
+}
+
+export async function cancelTaskExtensionRequest(
+  taskId: string,
+  userId: string
+): Promise<void> {
+  try {
+    const taskDocRef = doc(db, 'tasks', taskId);
+    const snap = await getDoc(taskDocRef);
+    if (!snap.exists()) {
+      throw new Error('Task not found');
+    }
+    const taskData = snap.data() as FirestoreTask;
+    if (!taskData.extensionRequest) return;
+
+    if (taskData.extensionRequest.requestedBy !== userId) {
+      throw new Error('You can only cancel your own extension request');
+    }
+
+    await updateDoc(taskDocRef, {
+      extensionRequest: null,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
     throw error;
   }
 }

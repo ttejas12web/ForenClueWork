@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { apiFetch } from '../lib/api';
+import { subscribeToTasks } from '../lib/firestoreService';
 import { TaskAllowedCalendar, StandardWorkspaceEvent, CalendarTaskItem } from '../components/TaskAllowedCalendar';
 
 export const Calendar: React.FC = () => {
@@ -70,58 +71,41 @@ export const Calendar: React.FC = () => {
     localStorage.setItem('forenclue_workspace_events', JSON.stringify(events));
   }, [events]);
 
-  // Fetch tasks
+  // Fetch tasks with real-time Firestore listener
   useEffect(() => {
-    fetchTasks();
-  }, [token, user]);
-
-  const fetchTasks = async () => {
     setLoadingTasks(true);
-    try {
-      if (token) {
-        const res = await apiFetch('/api/analytics/workspace-insights', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data: any = await res.json();
-          if (data?.userMetrics?.tasks) {
-            setTasks(data.userMetrics.tasks);
-            setLoadingTasks(false);
-            return;
+    const unsubscribe = subscribeToTasks((firestoreTasks) => {
+      const mapped: CalendarTaskItem[] = firestoreTasks.map((t) => {
+        const dueDateStr = t.dueDate || ((t as any).deadline ? new Date((t as any).deadline).toISOString().split('T')[0] : 'Standard');
+        let isOverdue = false;
+        if (t.status !== 'COMPLETED' && t.dueDate) {
+          const parsed = new Date(t.dueDate).getTime();
+          if (!isNaN(parsed) && parsed < Date.now()) {
+            isOverdue = true;
           }
         }
-      }
-    } catch (e) {
-      console.warn('Could not fetch insights, falling back to tasks endpoint', e);
-    }
-
-    try {
-      const res = await apiFetch('/api/tasks', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        return {
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          priority: (t.priority as any) || 'MEDIUM',
+          status: t.status === 'COMPLETED' ? 'COMPLETED' : t.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'TODO',
+          department: t.department || 'Digital Forensics',
+          dueDate: dueDateStr,
+          notes: t.notes || null,
+          assignedTo: t.assignedTo || null,
+          assignedUserName: t.assignedUserName,
+          assignedUserForenclueId: t.assignedUserForenclueId,
+          extensionRequest: t.extensionRequest,
+          isOverdue
+        };
       });
-      if (res.ok) {
-        const data: any = await res.json();
-        if (Array.isArray(data)) {
-          const mapped: CalendarTaskItem[] = data.map((t: any) => ({
-            id: t.id,
-            title: t.title,
-            description: t.description,
-            priority: t.priority || 'MEDIUM',
-            status: t.status === 'COMPLETED' ? 'COMPLETED' : t.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'TODO',
-            department: t.department || 'Digital Forensics',
-            dueDate: t.deadline ? new Date(t.deadline).toISOString().split('T')[0] : '2026-08-28',
-            notes: t.notes || null,
-            isOverdue: t.status !== 'COMPLETED' && t.deadline && t.deadline < Date.now()
-          }));
-          setTasks(mapped);
-        }
-      }
-    } catch (e) {
-      console.error('Tasks fetch error:', e);
-    } finally {
+      setTasks(mapped);
       setLoadingTasks(false);
-    }
-  };
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleCreateEvent = (e: React.FormEvent) => {
     e.preventDefault();

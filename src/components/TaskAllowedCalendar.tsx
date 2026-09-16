@@ -40,6 +40,13 @@ export interface CalendarTaskItem {
   assignedUserForenclueId?: string;
   isOverdue?: boolean;
   daysRemaining?: number | null;
+  extensionRequest?: {
+    requestedDueDate: string;
+    reason: string;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    requestedAt: string;
+    reviewNote?: string;
+  };
 }
 
 export interface StandardWorkspaceEvent {
@@ -622,6 +629,21 @@ export const TaskAllowedCalendar: React.FC<TaskAllowedCalendarProps> = ({
                         <div className="flex items-center space-x-1 text-[10px] text-slate-500 font-medium">
                           <Tag className="h-3 w-3 text-slate-400" />
                           <span>{task.department}</span>
+                        </div>
+                      )}
+
+                      {task.extensionRequest && (
+                        <div className={`text-[10px] font-semibold px-2 py-1 rounded-lg flex items-center justify-between ${
+                          task.extensionRequest.status === 'PENDING'
+                            ? 'bg-amber-100/90 text-amber-900 border border-amber-200'
+                            : task.extensionRequest.status === 'APPROVED'
+                            ? 'bg-emerald-100/90 text-emerald-900 border border-emerald-200'
+                            : 'bg-rose-100/90 text-rose-900 border border-rose-200'
+                        }`}>
+                          <span>
+                            {task.extensionRequest.status === 'PENDING' ? 'Ext Requested' : task.extensionRequest.status === 'APPROVED' ? 'Ext Approved' : 'Ext Disapproved'}
+                          </span>
+                          <span className="font-bold">{task.extensionRequest.requestedDueDate}</span>
                         </div>
                       )}
 
