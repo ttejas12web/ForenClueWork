@@ -557,13 +557,18 @@ export const Tasks: React.FC = () => {
   });
 
   const filteredMembersForModal = deptMembersForModal.filter(m => {
+    if (!m) return false;
     const q = memberSearchInModal.toLowerCase().trim();
     if (!q) return true;
+    const mName = m.name || '';
+    const mFcId = m.forenclueId || '';
+    const mRole = m.role || '';
+    const mEmail = m.email || '';
     return (
-      m.name.toLowerCase().includes(q) ||
-      m.forenclueId.toLowerCase().includes(q) ||
-      m.role.toLowerCase().includes(q) ||
-      (m.email && m.email.toLowerCase().includes(q))
+      mName.toLowerCase().includes(q) ||
+      mFcId.toLowerCase().includes(q) ||
+      mRole.toLowerCase().includes(q) ||
+      mEmail.toLowerCase().includes(q)
     );
   });
 

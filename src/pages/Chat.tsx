@@ -325,7 +325,7 @@ export const Chat = () => {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          setAllUsers(data);
+          setAllUsers(data.filter((u: any) => Boolean(u && u.id)));
         }
       }
     } catch (err: any) {
@@ -778,10 +778,14 @@ export const Chat = () => {
 
   // Filter members in create modal
   const filteredUsers = allUsers.filter(u => {
+    if (!u) return false;
     if (u.id === user?.id) return false;
+    const name = u.name || '';
+    const fcId = u.forenclueId || '';
+    const query = memberFilterQuery.toLowerCase();
     const matchesSearch = 
-      u.name.toLowerCase().includes(memberFilterQuery.toLowerCase()) ||
-      u.forenclueId.toLowerCase().includes(memberFilterQuery.toLowerCase());
+      name.toLowerCase().includes(query) ||
+      fcId.toLowerCase().includes(query);
     
     if (!matchesSearch) return false;
     if (memberRoleFilter === 'ALL') return true;
@@ -789,16 +793,20 @@ export const Chat = () => {
     return u.role === memberRoleFilter;
   });
 
-  const filteredUserIds = filteredUsers.map(u => u.id);
+  const filteredUserIds = filteredUsers.map(u => u?.id).filter(Boolean);
   const isAllFilteredSelected = filteredUserIds.length > 0 && filteredUserIds.every(id => selectedMemberIds.includes(id));
 
   // Available users to ADD to active group (not already members)
-  const currentMemberIds = new Set(activeGroup?.members?.map(m => m.id) || []);
+  const currentMemberIds = new Set(activeGroup?.members?.map(m => m?.id).filter(Boolean) || []);
   const availableUsersToAdd = allUsers.filter(u => {
+    if (!u) return false;
     if (currentMemberIds.has(u.id)) return false;
+    const name = u.name || '';
+    const fcId = u.forenclueId || '';
+    const query = addMemberFilterQuery.toLowerCase();
     const matchesSearch = 
-      u.name.toLowerCase().includes(addMemberFilterQuery.toLowerCase()) ||
-      u.forenclueId.toLowerCase().includes(addMemberFilterQuery.toLowerCase());
+      name.toLowerCase().includes(query) ||
+      fcId.toLowerCase().includes(query);
     
     if (!matchesSearch) return false;
     if (addMemberRoleFilter === 'ALL') return true;
@@ -806,7 +814,7 @@ export const Chat = () => {
     return u.role === addMemberRoleFilter;
   });
 
-  const availableUserIds = availableUsersToAdd.map(u => u.id);
+  const availableUserIds = availableUsersToAdd.map(u => u?.id).filter(Boolean);
   const isAllAvailableSelected = availableUserIds.length > 0 && availableUserIds.every(id => newSelectedMemberIds.includes(id));
 
   // Render Avatar Helper
@@ -853,14 +861,21 @@ export const Chat = () => {
 
   // Filter groups in sidebar
   const filteredGroups = groups.filter(g => {
-    const nameMatch = g.displayName 
-      ? g.displayName.toLowerCase().includes(searchQuery.toLowerCase()) 
-      : g.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const descMatch = g.description && g.description.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!g) return false;
+    const gDisplayName = g.displayName || '';
+    const gName = g.name || '';
+    const query = searchQuery.toLowerCase();
+    const nameMatch = gDisplayName 
+      ? gDisplayName.toLowerCase().includes(query) 
+      : gName.toLowerCase().includes(query);
+    const descMatch = g.description && g.description.toLowerCase().includes(query);
+    const otherName = g.otherUser?.name || '';
+    const otherFcId = g.otherUser?.forenclueId || '';
+    const otherDept = g.otherUser?.department || '';
     const userMatch = g.otherUser && (
-      g.otherUser.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      g.otherUser.forenclueId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (g.otherUser.department && g.otherUser.department.toLowerCase().includes(searchQuery.toLowerCase()))
+      otherName.toLowerCase().includes(query) ||
+      otherFcId.toLowerCase().includes(query) ||
+      otherDept.toLowerCase().includes(query)
     );
     return nameMatch || descMatch || userMatch;
   });
@@ -1525,10 +1540,10 @@ export const Chat = () => {
                       >
                         <div className="flex items-center space-x-3 truncate">
                           <div className="h-8 w-8 rounded-lg bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs flex-shrink-0">
-                            {u.name.charAt(0)}
+                            {(u?.name || 'M').charAt(0).toUpperCase()}
                           </div>
                           <div className="truncate">
-                            <p className="text-xs font-semibold text-slate-800 truncate">{u.name}</p>
+                            <p className="text-xs font-semibold text-slate-800 truncate">{u?.name || 'Workspace Member'}</p>
                             <div className="flex items-center space-x-2">
                               <span className="text-[10px] font-mono text-slate-400">{u.forenclueId}</span>
                               <span className="text-[9px] bg-slate-100 text-slate-600 font-medium px-1.5 py-0.2 rounded">
@@ -1813,10 +1828,10 @@ export const Chat = () => {
                         >
                           <div className="flex items-center space-x-3 truncate">
                             <div className="h-8 w-8 rounded-lg bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-xs flex-shrink-0">
-                              {u.name.charAt(0)}
+                              {(u?.name || 'M').charAt(0).toUpperCase()}
                             </div>
                             <div className="truncate">
-                              <p className="text-xs font-semibold text-slate-800 truncate">{u.name}</p>
+                              <p className="text-xs font-semibold text-slate-800 truncate">{u?.name || 'Workspace Member'}</p>
                               <div className="flex items-center space-x-2">
                                 <span className="text-[10px] font-mono text-slate-400">{u.forenclueId}</span>
                                 <span className="text-[9px] bg-slate-100 text-slate-600 font-medium px-1.5 py-0.2 rounded">

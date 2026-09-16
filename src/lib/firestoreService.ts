@@ -474,7 +474,7 @@ export function findMatchingUser(users: FirestoreUser[], identifier: string): Fi
   ) {
     return null;
   }
-  const filteredUsers = users.filter(u => !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
+  const filteredUsers = users.filter(u => Boolean(u && u.id) && !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
   const alphaNum = cleanIdent.replace(/[^a-z0-9]/g, '');
 
   // Tier 1: Exact ForenClue ID match (case-insensitive)
@@ -699,20 +699,25 @@ export async function authenticateWithFirestore(identifier: string, passwordAtte
 }
 
 function normalizeUserRecord(user: FirestoreUser): FirestoreUser {
+  if (!user) return user;
+  const normalized = { ...user };
+  normalized.name = (normalized.name || '').trim() || 'Workspace Member';
+  normalized.forenclueId = normalized.forenclueId || normalized.id || 'FC-USR-000';
+  normalized.email = normalized.email || '';
   if (
-    user.forenclueId === 'FC-EMP-2026-001' ||
-    user.email?.toLowerCase() === 'ttapse12@gmail.com' ||
-    user.id === 'user_admin_001'
+    normalized.forenclueId === 'FC-EMP-2026-001' ||
+    normalized.email?.toLowerCase() === 'ttapse12@gmail.com' ||
+    normalized.id === 'user_admin_001'
   ) {
     return {
-      ...user,
+      ...normalized,
       name: 'Tejas Tapse',
       forenclueId: 'FC-EMP-2026-001',
       email: 'ttapse12@gmail.com',
       role: 'SUPER_ADMIN'
     };
   }
-  return user;
+  return normalized;
 }
 
 export async function fetchAllUsers(): Promise<FirestoreUser[]> {
@@ -724,14 +729,14 @@ export async function fetchAllUsers(): Promise<FirestoreUser[]> {
       const freshSnap = await getDocs(usersCol);
       return freshSnap.docs
         .map(d => normalizeUserRecord({ ...d.data(), id: d.id } as FirestoreUser))
-        .filter(u => !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
+        .filter(u => Boolean(u && u.id) && !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
     }
     return snap.docs
       .map(d => {
         const { password: _, ...rest } = d.data() as FirestoreUser;
         return normalizeUserRecord({ ...rest, id: d.id } as FirestoreUser);
       })
-      .filter(u => !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
+      .filter(u => Boolean(u && u.id) && !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'users');
     return [];
@@ -746,7 +751,7 @@ export function subscribeToUsers(callback: (users: FirestoreUser[]) => void): Un
         const { password: _, ...rest } = d.data() as FirestoreUser;
         return normalizeUserRecord({ ...rest, id: d.id } as FirestoreUser);
       })
-      .filter(u => !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
+      .filter(u => Boolean(u && u.id) && !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
     callback(usersList);
   }, (error) => {
     handleFirestoreError(error, OperationType.LIST, 'users');

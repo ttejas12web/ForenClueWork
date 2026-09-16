@@ -71,7 +71,9 @@ export const AdminConsole = () => {
       
       if (usersRes.ok) {
         const fetchedUsers = await usersRes.json();
-        setUsers(fetchedUsers.sort((a: any, b: any) => b.id - a.id));
+        if (Array.isArray(fetchedUsers)) {
+          setUsers(fetchedUsers.filter((u: any) => Boolean(u && u.id)));
+        }
       }
       setSettings(settingsData);
     } catch (error) {
@@ -195,8 +197,13 @@ export const AdminConsole = () => {
         throw new Error(data.error || 'Failed to create user');
       }
       
-      setUsers([data.user, ...users]);
-      setFormSuccess(`Successfully registered ${data.user.name} with ForenClue ID: ${data.user.forenclueId}`);
+      const newUserObj = data?.user || data;
+      if (!newUserObj || !newUserObj.id) {
+        throw new Error('Failed to create user: Invalid response data');
+      }
+
+      setUsers(prev => [newUserObj, ...prev.filter((u: any) => Boolean(u && u.id))]);
+      setFormSuccess(`Successfully registered ${newUserObj.name || 'member'} with ForenClue ID: ${newUserObj.forenclueId}`);
       setNewName('');
       setNewEmail('');
       setTimeout(() => {
@@ -223,10 +230,15 @@ export const AdminConsole = () => {
   }
 
   const filteredUsers = users.filter((u) => {
+    if (!u) return false;
+    const name = u.name || '';
+    const dept = u.department || '';
+    const fcId = u.forenclueId || '';
+    const query = searchQuery.toLowerCase();
     const matchesSearch = 
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (u.department && u.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      u.forenclueId.toLowerCase().includes(searchQuery.toLowerCase());
+      name.toLowerCase().includes(query) ||
+      dept.toLowerCase().includes(query) ||
+      fcId.toLowerCase().includes(query);
     
     if (!matchesSearch) return false;
     if (roleFilter === 'ALL') return true;
@@ -508,15 +520,19 @@ export const AdminConsole = () => {
                     <td colSpan={5} className="px-5 py-8 text-center text-slate-400">No members found matching your search.</td>
                   </tr>
                 ) : (
-                  filteredUsers.map((u) => (
+                  filteredUsers.map((u) => {
+                    if (!u) return null;
+                    const displayName = u.name || 'Workspace Member';
+                    const initial = displayName.charAt(0).toUpperCase();
+                    return (
                     <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center space-x-3">
                           <div className="h-8 w-8 rounded-xl bg-blue-50 text-blue-700 font-bold flex items-center justify-center text-xs flex-shrink-0">
-                            {u.name.charAt(0)}
+                            {initial}
                           </div>
                           <div>
-                            <p className="font-bold text-slate-900">{u.name}</p>
+                            <p className="font-bold text-slate-900">{displayName}</p>
                           </div>
                         </div>
                       </td>
@@ -553,7 +569,7 @@ export const AdminConsole = () => {
                               ? 'bg-rose-50 text-rose-700 border border-rose-200'
                               : 'bg-slate-100 text-slate-700'
                         }`}>
-                          {u.role.replace('_', ' ')}
+                          {(u.role || 'MEMBER').replace('_', ' ')}
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-right">
@@ -565,7 +581,8 @@ export const AdminConsole = () => {
                         </button>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -578,21 +595,25 @@ export const AdminConsole = () => {
             ) : filteredUsers.length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-400">No members found.</div>
             ) : (
-              filteredUsers.map((u) => (
+              filteredUsers.map((u) => {
+                if (!u) return null;
+                const displayName = u.name || 'Workspace Member';
+                const initial = displayName.charAt(0).toUpperCase();
+                return (
                 <div key={u.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-2.5">
                       <div className="h-9 w-9 rounded-xl bg-blue-50 text-blue-700 font-bold flex items-center justify-center text-xs flex-shrink-0">
-                        {u.name.charAt(0)}
+                        {initial}
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900">{u.name}</h4>
+                        <h4 className="text-xs font-bold text-slate-900">{displayName}</h4>
                       </div>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                       u.role === 'SUPER_ADMIN' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
                     }`}>
-                      {u.role.replace('_', ' ')}
+                      {(u.role || 'MEMBER').replace('_', ' ')}
                     </span>
                   </div>
 
@@ -632,7 +653,8 @@ export const AdminConsole = () => {
                     </div>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -655,6 +677,7 @@ export const AdminConsole = () => {
               { name: 'Campus Ambassadors', code: 'CA', color: 'bg-gradient-to-tr from-amber-500 via-amber-600 to-orange-600', mentor: 'All Super Admins (Council)', isSpecial: true },
             ].map((d) => {
               const count = users.filter(u => {
+                if (!u) return false;
                 const userDept = (u.department || '').trim().toLowerCase();
                 if (d.name === 'Campus Ambassadors') {
                   return userDept.includes('campus ambassador') || userDept.includes('ambassador') || u.role === 'CAMPUS_AMBASSADOR';
