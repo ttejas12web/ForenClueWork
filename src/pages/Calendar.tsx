@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { apiFetch } from '../lib/api';
-import { TaskAllowedCalendar, DEFAULT_STANDARD_EVENTS, StandardWorkspaceEvent, CalendarTaskItem } from '../components/TaskAllowedCalendar';
+import { TaskAllowedCalendar, StandardWorkspaceEvent, CalendarTaskItem } from '../components/TaskAllowedCalendar';
 
 export const Calendar: React.FC = () => {
   const { user, token } = useAuthStore();
@@ -27,18 +27,24 @@ export const Calendar: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'CALENDAR_VIEW' | 'EVENTS_GRID' | 'MY_TASKS'>('CALENDAR_VIEW');
   
-  // Workspace Events State with Standard Initial Data
+  const getTodayDateString = () => new Date().toISOString().split('T')[0];
+
+  // Workspace Events State
   const [events, setEvents] = useState<StandardWorkspaceEvent[]>(() => {
     const saved = localStorage.getItem('forenclue_workspace_events');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          const dummyIds = new Set(['evt-01', 'evt-02', 'evt-03', 'evt-04', 'evt-05']);
+          const cleaned = parsed.filter((e: any) => !dummyIds.has(e.id) && !e.title?.includes('Volatile RAM') && !e.title?.includes('Digital Forensics & Incident Response'));
+          return cleaned;
+        }
       } catch (e) {
         // fallback
       }
     }
-    return DEFAULT_STANDARD_EVENTS;
+    return [];
   });
 
   // Allotted Tasks State
@@ -50,7 +56,7 @@ export const Calendar: React.FC = () => {
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [title, setTitle] = useState('');
-  const [date, setDate] = useState('2026-08-28');
+  const [date, setDate] = useState(getTodayDateString());
   const [time, setTime] = useState('10:00 AM - 11:30 AM IST');
   const [location, setLocation] = useState('Virtual Room Alpha');
   const [attendees, setAttendees] = useState('All Workspace Members');
@@ -137,7 +143,7 @@ export const Calendar: React.FC = () => {
 
     setEvents([newEvent, ...events]);
     setTitle('');
-    setDate('2026-08-28');
+    setDate(getTodayDateString());
     setTime('10:00 AM - 11:30 AM IST');
     setLocation('Virtual Room Alpha');
     setAttendees('All Workspace Members');
@@ -301,6 +307,7 @@ export const Calendar: React.FC = () => {
       {activeTab === 'CALENDAR_VIEW' && (
         <TaskAllowedCalendar
           tasks={tasks}
+          events={events}
           user={user}
           onUpdateTaskStatus={handleUpdateTaskStatus}
         />

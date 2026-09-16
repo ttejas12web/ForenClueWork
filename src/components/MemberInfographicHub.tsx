@@ -50,7 +50,7 @@ interface DepartmentStat {
 }
 
 interface RankedMember {
-  userId: number;
+  userId: number | string;
   name: string;
   forenclueId: string;
   role: string;
@@ -185,8 +185,51 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
     );
   }
 
-  const { departmentStats, leaderboard, teamBenchmark, userMetrics } = data;
-  const userTasks = userMetrics.tasks;
+  const isSuperAdminAccount = (m: any) => {
+    if (!m) return false;
+    const role = String(m.role || '').toUpperCase().trim();
+    const forenclueId = String(m.forenclueId || '');
+    const userId = String(m.userId || m.id || '');
+    return (
+      role === 'SUPER_ADMIN' ||
+      role === 'SUPER ADMIN' ||
+      role.includes('SUPER_ADMIN') ||
+      forenclueId === 'FC-EMP-2026-001' ||
+      forenclueId === 'FC-EMP-2026-002' ||
+      forenclueId === 'FC-EMP-2026-003' ||
+      userId === 'user_admin_001' ||
+      userId === 'user_emp_002' ||
+      userId === 'user_emp_003'
+    );
+  };
+
+  const safeDeptStats: DepartmentStat[] = (Array.isArray(data?.departmentStats) ? data.departmentStats : []).map(dept => {
+    if (dept.topPerformer && isSuperAdminAccount(dept.topPerformer)) {
+      return { ...dept, topPerformer: null };
+    }
+    return dept;
+  });
+
+  const safeLeaderboard = (Array.isArray(data?.leaderboard) ? data.leaderboard : [])
+    .filter(member => !isSuperAdminAccount(member));
+  const safeTeamBenchmark = data?.teamBenchmark || {
+    totalWorkspaceTasks: 0,
+    totalCompleted: 0,
+    totalInProgress: 0,
+    totalTodo: 0,
+    overallOnTimeRate: 100,
+    turnaroundAverageDays: 0,
+    activeSprintVelocity: 0
+  };
+  const safeUserMetrics = data?.userMetrics || {
+    totalAllotted: 0,
+    completed: 0,
+    inProgress: 0,
+    todo: 0,
+    onTimeRate: 100,
+    tasks: []
+  };
+  const userTasks = Array.isArray(safeUserMetrics.tasks) ? safeUserMetrics.tasks : [];
 
   const filteredTasks = userTasks.filter(t => {
     if (taskFilter === 'URGENT') return t.deadlineStatus === 'URGENT' || t.deadlineStatus === 'OVERDUE';
@@ -195,8 +238,18 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
     return true;
   });
 
-  const maxDeptTasks = Math.max(...departmentStats.map(d => d.totalTasks), 1);
-  const highestVolumeDept = departmentStats[0];
+  const maxDeptTasks = Math.max(...safeDeptStats.map(d => d.totalTasks || 0), 1);
+  const highestVolumeDept = safeDeptStats[0] || {
+    department: 'Forensic Operations',
+    totalTasks: 0,
+    completedTasks: 0,
+    inProgressTasks: 0,
+    todoTasks: 0,
+    completionRate: 0,
+    onTimeRate: 100,
+    theme: { bg: 'bg-blue-50', badge: 'bg-blue-50 text-blue-700 border-blue-200', bar: 'bg-blue-600' },
+    topPerformer: null
+  };
   const activeTasks = userTasks.filter(task => task.status !== 'COMPLETED');
   const overdueTasks = activeTasks.filter(task => task.isOverdue || task.deadlineStatus === 'OVERDUE');
   const dueSoonTasks = activeTasks.filter(task => task.daysRemaining !== null && task.daysRemaining >= 0 && task.daysRemaining <= 7);
@@ -208,8 +261,8 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
     if (deadlineDifference !== 0) return deadlineDifference;
     return priorityRank[b.priority] - priorityRank[a.priority];
   })[0];
-  const completionRate = userMetrics.totalAllotted > 0
-    ? Math.round((userMetrics.completed / userMetrics.totalAllotted) * 100)
+  const completionRate = safeUserMetrics.totalAllotted > 0
+    ? Math.round((safeUserMetrics.completed / safeUserMetrics.totalAllotted) * 100)
     : 0;
   const todayLabel = new Intl.DateTimeFormat('en-IN', {
     weekday: 'long',
@@ -248,7 +301,7 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 <span>On-Time Rate</span>
               </div>
-              <p className="text-xl sm:text-2xl font-black text-white">{teamBenchmark.overallOnTimeRate}%</p>
+              <p className="text-xl sm:text-2xl font-black text-white">{safeTeamBenchmark.overallOnTimeRate}%</p>
               <p className="text-[10px] text-slate-300">Workspace Average</p>
             </div>
 
@@ -257,7 +310,7 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
                 <Flame className="h-3.5 w-3.5" />
                 <span>Active Sprint</span>
               </div>
-              <p className="text-xl sm:text-2xl font-black text-white">{teamBenchmark.activeSprintVelocity}%</p>
+              <p className="text-xl sm:text-2xl font-black text-white">{safeTeamBenchmark.activeSprintVelocity}%</p>
               <p className="text-[10px] text-slate-300">Velocity Index</p>
             </div>
 
@@ -267,7 +320,7 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
                 <span>My Tasks</span>
               </div>
               <p className="text-xl sm:text-2xl font-black text-white">
-                {userMetrics.completed} / {userMetrics.totalAllotted}
+                {safeUserMetrics.completed} / {safeUserMetrics.totalAllotted}
               </p>
               <p className="text-[10px] text-slate-300">Completed Allotted</p>
             </div>
@@ -316,7 +369,7 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               </div>
               <p className="mt-1 text-2xl font-black text-slate-900">{completionRate}%</p>
-              <p className="text-[11px] text-slate-600">{userMetrics.completed} of {userMetrics.totalAllotted} allotted</p>
+              <p className="text-[11px] text-slate-600">{safeUserMetrics.completed} of {safeUserMetrics.totalAllotted} allotted</p>
             </div>
           </div>
 
@@ -391,7 +444,7 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
           }`}
         >
           <CheckSquare className="h-3.5 w-3.5 flex-shrink-0" />
-          <span className="truncate">My Tasks & Deadlines ({userMetrics.tasks.length})</span>
+          <span className="truncate">My Tasks & Deadlines ({safeUserMetrics.tasks.length})</span>
         </button>
 
         <button
@@ -632,7 +685,7 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
                 <h3 className="text-base font-bold">Highest Task Volume Department</h3>
               </div>
               <p className="text-xs text-blue-100">
-                <span className="font-bold text-white text-sm">{highestVolumeDept.department}</span> leads with <span className="font-bold text-amber-300">{highestVolumeDept.totalTasks} total tasks</span> ({Math.round((highestVolumeDept.totalTasks / (teamBenchmark.totalWorkspaceTasks || 1)) * 100)}% of workspace load).
+                <span className="font-bold text-white text-sm">{highestVolumeDept.department}</span> leads with <span className="font-bold text-amber-300">{highestVolumeDept.totalTasks} total tasks</span> ({Math.round((highestVolumeDept.totalTasks / (safeTeamBenchmark.totalWorkspaceTasks || 1)) * 100)}% of workspace load).
               </p>
             </div>
 
@@ -644,21 +697,35 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
 
           {/* Department Comparison Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {departmentStats.map((dept) => {
-              const volumePercent = Math.round((dept.totalTasks / maxDeptTasks) * 100);
+            {safeDeptStats.map((dept) => {
+              const deptName = dept.department || (dept as any).name || 'Department';
+              const totalTasks = dept.totalTasks || 0;
+              const completedTasks = dept.completedTasks || 0;
+              const inProgressTasks = dept.inProgressTasks || 0;
+              const todoTasks = dept.todoTasks || 0;
+              const completionRate = dept.completionRate || 0;
+              const onTimeRate = dept.onTimeRate ?? 100;
+              const theme = dept.theme || {
+                bg: 'bg-blue-50',
+                badge: 'bg-blue-50 text-blue-700 border-blue-200',
+                bar: 'bg-blue-600'
+              };
+              const badgeClass = theme.badge || 'bg-blue-50 text-blue-700 border-blue-200';
+              const barClass = theme.bar || 'bg-blue-600';
+
               return (
-                <div key={dept.department} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4 hover:shadow-md transition-shadow">
+                <div key={deptName} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4 hover:shadow-md transition-shadow">
                   {/* Dept Header */}
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${dept.theme.badge}`}>
-                        {dept.department}
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}`}>
+                        {deptName}
                       </span>
-                      <h4 className="text-sm font-bold text-slate-900 mt-1.5">{dept.totalTasks} Tasks Total</h4>
+                      <h4 className="text-sm font-bold text-slate-900 mt-1.5">{totalTasks} Tasks Total</h4>
                     </div>
 
                     <div className="text-right">
-                      <span className="text-xs font-black text-emerald-600">{dept.onTimeRate}%</span>
+                      <span className="text-xs font-black text-emerald-600">{onTimeRate}%</span>
                       <span className="text-[10px] text-slate-400 block">On-Time Rate</span>
                     </div>
                   </div>
@@ -667,18 +734,18 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
                       <span>Workload Distribution</span>
-                      <span>{dept.completedTasks} / {dept.totalTasks} Done</span>
+                      <span>{completedTasks} / {totalTasks} Done</span>
                     </div>
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
                       <div 
-                        className={`h-full ${dept.theme.bar} transition-all duration-500`}
-                        style={{ width: `${dept.completionRate}%` }}
-                        title={`${dept.completedTasks} Completed`}
+                        className={`h-full ${barClass} transition-all duration-500`}
+                        style={{ width: `${completionRate}%` }}
+                        title={`${completedTasks} Completed`}
                       />
                       <div 
                         className="h-full bg-amber-400 transition-all duration-500"
-                        style={{ width: `${dept.totalTasks > 0 ? (dept.inProgressTasks / dept.totalTasks) * 100 : 0}%` }}
-                        title={`${dept.inProgressTasks} In Progress`}
+                        style={{ width: `${totalTasks > 0 ? (inProgressTasks / totalTasks) * 100 : 0}%` }}
+                        title={`${inProgressTasks} In Progress`}
                       />
                     </div>
                   </div>
@@ -687,15 +754,15 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
                   <div className="grid grid-cols-3 gap-2 text-center text-xs">
                     <div className="bg-emerald-50 p-2 rounded-xl border border-emerald-100">
                       <span className="text-[10px] text-emerald-700 font-semibold block">Completed</span>
-                      <span className="font-bold text-emerald-800 text-sm">{dept.completedTasks}</span>
+                      <span className="font-bold text-emerald-800 text-sm">{completedTasks}</span>
                     </div>
                     <div className="bg-amber-50 p-2 rounded-xl border border-amber-100">
                       <span className="text-[10px] text-amber-700 font-semibold block">In Progress</span>
-                      <span className="font-bold text-amber-800 text-sm">{dept.inProgressTasks}</span>
+                      <span className="font-bold text-amber-800 text-sm">{inProgressTasks}</span>
                     </div>
                     <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
                       <span className="text-[10px] text-slate-600 font-semibold block">Pending</span>
-                      <span className="font-bold text-slate-800 text-sm">{dept.todoTasks}</span>
+                      <span className="font-bold text-slate-800 text-sm">{todoTasks}</span>
                     </div>
                   </div>
 
@@ -758,7 +825,7 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
               </div>
             </div>
 
-            {leaderboard.length === 0 ? (
+            {safeLeaderboard.length === 0 ? (
               <div className="py-12 text-center space-y-2">
                 <div className="h-10 w-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center mx-auto">
                   <Trophy className="h-5 w-5" />
@@ -782,11 +849,11 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
-                    {leaderboard.map((member, index) => (
+                    {safeLeaderboard.map((member, index) => (
                       <tr 
                         key={member.userId}
                         className={`hover:bg-slate-50/80 transition-colors ${
-                          member.userId === user.id ? 'bg-blue-50/60 font-semibold' : ''
+                          String(member.userId) === String(user.id) ? 'bg-blue-50/60 font-semibold' : ''
                         }`}
                       >
                         <td className="px-4 py-3.5 font-bold">
@@ -817,7 +884,7 @@ export const MemberInfographicHub: React.FC<MemberInfographicHubProps> = ({ user
                             <div>
                               <div className="flex items-center space-x-1.5">
                                 <span className="font-bold text-slate-900">{member.name}</span>
-                                {member.userId === user.id && (
+                                {String(member.userId) === String(user.id) && (
                                   <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-600 text-white">
                                     YOU
                                   </span>

@@ -219,40 +219,6 @@ export const SEED_USERS: FirestoreUser[] = [
     active: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_vol_027',
-    forenclueId: 'FC-VOL-2026-027',
-    name: 'Pranav Kale',
-    email: 'pranav.kale@forenclue.in',
-    password: 'Forenclue@2026',
-    role: 'VOLUNTEER',
-    department: 'Creative & Graphics',
-    designation: 'Forensic Graphic Designer & Volunteer',
-    phone: '+91 98765 43227',
-    bio: 'Visual evidence diagrams, case presentation graphics, and forensic infographics.',
-    isDefaultPassword: true,
-    tempPasswordChanged: false,
-    active: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'user_vol_003',
-    forenclueId: 'FC-VOL-2026-003',
-    name: 'Okeke Rejoice',
-    email: 'okeke.rejoice@forenclue.in',
-    password: 'Forenclue@2026',
-    role: 'VOLUNTEER',
-    department: 'Creative & Graphics',
-    designation: 'Creative Media & Graphic Designer Volunteer',
-    phone: '+91 98765 43203',
-    bio: 'Digital case infographics, UI/UX presentation, and creative media asset design.',
-    isDefaultPassword: true,
-    tempPasswordChanged: false,
-    active: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
   }
 ];
 
@@ -296,7 +262,7 @@ const SEED_DEFAULT_GROUPS: Omit<FirestoreChatGroup, 'id'>[] = [
     isDirect: false,
     createdBy: 'user_admin_001',
     createdAt: new Date().toISOString(),
-    memberIds: ['user_admin_001', 'user_vol_027'],
+    memberIds: ['user_admin_001'],
     lastMessageText: '',
     lastMessageAt: new Date().toISOString(),
   }
@@ -304,10 +270,10 @@ const SEED_DEFAULT_GROUPS: Omit<FirestoreChatGroup, 'id'>[] = [
 
 export async function ensureDefaultFirestoreSeed(): Promise<void> {
   try {
-    // 1. Remove deprecated / removed members (Purva Bhawsar/Hawser, user_emp_004, user_emp_005) from all collections
-    const purvaDocIds = new Set<string>(['user_emp_004', 'FC-EMP-2026-004']);
+    // 1. Remove deprecated / removed members (Purva Bhawsar/Hawser, user_emp_004, user_emp_005, dummy seed users) from all collections
+    const purvaDocIds = new Set<string>(['user_emp_004', 'FC-EMP-2026-004', 'user_vol_027', 'user_vol_003']);
     try {
-      const deprecatedIds = ['user_emp_004', 'user_emp_005'];
+      const deprecatedIds = ['user_emp_004', 'user_emp_005', 'user_vol_027', 'user_vol_003'];
       for (const depId of deprecatedIds) {
         const deprecatedDocRef = doc(db, 'users', depId);
         const depSnap = await getDoc(deprecatedDocRef);
@@ -420,15 +386,6 @@ export async function ensureDefaultFirestoreSeed(): Promise<void> {
             }
           }
           
-          // Enforce department for Pranav Kale
-          if (u.id === 'user_vol_027' || u.forenclueId === 'FC-VOL-2026-027') {
-            if (existingData.department !== 'Creative & Graphics') {
-              await updateDoc(userDocRef, {
-                department: 'Creative & Graphics'
-              });
-            }
-          }
-
           // Enforce removing Ayush Gaikwad from Creative & Graphics
           if (u.id === 'user_emp_003' || u.forenclueId === 'FC-EMP-2026-003') {
             if (existingData.department === 'Creative & Graphics') {

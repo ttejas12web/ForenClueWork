@@ -161,7 +161,20 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
     const allTasks = (await fetchAllTasks()) || [];
     const allUsers = (await fetchAllUsers()) || [];
     const userId = localStorage.getItem('auth_user_id') || '';
-    const userTasks = allTasks.filter((t: any) => t.assignedTo === userId);
+    let storedUser: any = null;
+    try {
+      const uStr = localStorage.getItem('auth_user');
+      if (uStr) storedUser = JSON.parse(uStr);
+    } catch {
+      // Ignore parse error
+    }
+
+    const userTasks = allTasks.filter((t: any) => 
+      (userId && String(t.assignedTo) === String(userId)) ||
+      (storedUser?.id && String(t.assignedTo) === String(storedUser.id)) ||
+      (storedUser?.forenclueId && t.assignedUserForenclueId === storedUser.forenclueId) ||
+      (storedUser?.email && t.assignedUserEmail === storedUser.email)
+    );
     
     const DEPARTMENTS = [
       'Creative & Graphics',
@@ -172,19 +185,103 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
       'Campus Ambassadors'
     ];
 
-    const departmentStats = DEPARTMENTS.map(deptName => {
+    const DEPARTMENT_THEMES: Record<string, { bg: string; badge: string; bar: string }> = {
+      'Creative & Graphics': { bg: 'bg-rose-50', badge: 'bg-rose-50 text-rose-700 border-rose-200', bar: 'bg-rose-600' },
+      'Creative & Design': { bg: 'bg-rose-50', badge: 'bg-rose-50 text-rose-700 border-rose-200', bar: 'bg-rose-600' },
+      'Case Study': { bg: 'bg-emerald-50', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: 'bg-emerald-600' },
+      'Research': { bg: 'bg-blue-50', badge: 'bg-blue-50 text-blue-700 border-blue-200', bar: 'bg-blue-600' },
+      'Events & Management': { bg: 'bg-purple-50', badge: 'bg-purple-50 text-purple-700 border-purple-200', bar: 'bg-purple-600' },
+      'Cyber & Digital Forensics': { bg: 'bg-indigo-50', badge: 'bg-indigo-50 text-indigo-700 border-indigo-200', bar: 'bg-indigo-600' },
+      'Campus Ambassadors': { bg: 'bg-amber-50', badge: 'bg-amber-50 text-amber-900 border-amber-300', bar: 'bg-amber-600' }
+    };
+
+    const knownDepts = new Set(DEPARTMENTS);
+    allTasks.forEach((t: any) => {
+      if (t.department && typeof t.department === 'string' && t.department.trim()) {
+        knownDepts.add(t.department.trim());
+      }
+    });
+
+    const departmentStats = Array.from(knownDepts).map(deptName => {
       const deptTasks = allTasks.filter((t: any) => t.department === deptName);
       const completed = deptTasks.filter((t: any) => t.status === 'COMPLETED').length;
+      const inProgress = deptTasks.filter((t: any) => t.status === 'IN_PROGRESS').length;
+      const todo = deptTasks.filter((t: any) => t.status === 'TODO' || !t.status).length;
       const deptUsers = allUsers.filter((u: any) => u.department === deptName && u.active !== false);
-      const score = deptTasks.length > 0 ? Math.round((completed / deptTasks.length) * 100) : 0;
+      const completionRate = deptTasks.length > 0 ? Math.round((completed / deptTasks.length) * 100) : 0;
+      
+      const overdueCompleted = deptTasks.filter((t: any) => {
+        if (t.status === 'COMPLETED' && t.dueDate && t.submittedAt) {
+          return new Date(t.submittedAt) > new Date(t.dueDate);
+        }
+        return false;
+      }).length;
+      const onTimeRate = completed > 0 
+        ? Math.max(0, Math.round(((completed - overdueCompleted) / completed) * 100))
+        : 100;
+
+      const isSuperAdminAccount = (u: any) => {
+        if (!u) return false;
+        const role = String(u.role || '').toUpperCase().trim();
+        const designation = String(u.designation || '').toLowerCase();
+        return (
+          role === 'SUPER_ADMIN' ||
+          role === 'SUPER ADMIN' ||
+          role.includes('SUPER_ADMIN') ||
+          designation.includes('super admin') ||
+          designation.includes('super administrator') ||
+          u.id === 'user_admin_001' ||
+          u.id === 'user_emp_002' ||
+          u.id === 'user_emp_003' ||
+          u.forenclueId === 'FC-EMP-2026-001' ||
+          u.forenclueId === 'FC-EMP-2026-002' ||
+          u.forenclueId === 'FC-EMP-2026-003'
+        );
+      };
+
+      // Top performer for this department (excluding super admins)
+      let topPerformer: any = null;
+      let maxPerformerScore = -1;
+      const candidates = (deptUsers.length > 0 ? deptUsers : allUsers).filter((u: any) => !isSuperAdminAccount(u));
+      for (const u of candidates) {
+        const uTasks = deptTasks.filter((t: any) => String(t.assignedTo) === String(u.id));
+        const uCompleted = uTasks.filter((t: any) => t.status === 'COMPLETED').length;
+        if (uCompleted > 0 || uTasks.length > 0) {
+          const score = uCompleted * 10 + uTasks.length;
+          if (score > maxPerformerScore) {
+            maxPerformerScore = score;
+            topPerformer = {
+              name: u.name,
+              forenclueId: u.forenclueId || `FC-MEM-${u.id}`,
+              role: u.role || 'Member',
+              completedCount: uCompleted,
+              totalAssigned: uTasks.length,
+              efficiencyScore: Math.min(100, 60 + uCompleted * 10)
+            };
+          }
+        }
+      }
+
+      const theme = DEPARTMENT_THEMES[deptName] || {
+        bg: 'bg-blue-50',
+        badge: 'bg-blue-50 text-blue-700 border-blue-200',
+        bar: 'bg-blue-600'
+      };
+
       return {
+        department: deptName,
         name: deptName,
         totalTasks: deptTasks.length,
         completedTasks: completed,
+        inProgressTasks: inProgress,
+        todoTasks: todo,
         activeUsers: deptUsers.length,
-        score
+        completionRate,
+        onTimeRate,
+        theme,
+        topPerformer
       };
-    });
+    }).sort((a, b) => b.totalTasks - a.totalTasks);
 
     const totalWorkspaceTasks = allTasks.length;
     const totalCompleted = allTasks.filter((t: any) => t.status === 'COMPLETED').length;
@@ -242,9 +339,55 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
       ? Math.round((userCompleted / userTasks.length) * 100) 
       : 0;
 
+    const isSuperAdminAccount = (u: any) => {
+      if (!u) return false;
+      const role = String(u.role || '').toUpperCase().trim();
+      const designation = String(u.designation || '').toLowerCase();
+      return (
+        role === 'SUPER_ADMIN' ||
+        role === 'SUPER ADMIN' ||
+        role.includes('SUPER_ADMIN') ||
+        designation.includes('super admin') ||
+        designation.includes('super administrator') ||
+        u.id === 'user_admin_001' ||
+        u.id === 'user_emp_002' ||
+        u.id === 'user_emp_003' ||
+        u.forenclueId === 'FC-EMP-2026-001' ||
+        u.forenclueId === 'FC-EMP-2026-002' ||
+        u.forenclueId === 'FC-EMP-2026-003'
+      );
+    };
+
+    const leaderboard = allUsers
+      .filter((u: any) => u.active !== false && !isSuperAdminAccount(u))
+      .map((u: any) => {
+        const uTasks = allTasks.filter((t: any) => String(t.assignedTo) === String(u.id));
+        const completed = uTasks.filter((t: any) => t.status === 'COMPLETED').length;
+        const inProgress = uTasks.filter((t: any) => t.status === 'IN_PROGRESS').length;
+        const todo = uTasks.filter((t: any) => t.status === 'TODO').length;
+        const onTimePercentage = uTasks.length > 0 ? Math.round((completed / uTasks.length) * 100) : 100;
+        const efficiencyScore = completed * 25 + Math.min(onTimePercentage, 100);
+
+        return {
+          userId: Number(u.id) || u.id,
+          name: u.name || 'Member',
+          forenclueId: u.forenclueId || `FC-MEM-${u.id}`,
+          role: u.role || 'Member',
+          department: u.department || 'Operations',
+          totalAssigned: uTasks.length,
+          completed,
+          inProgress,
+          todo,
+          onTimePercentage,
+          efficiencyScore
+        };
+      })
+      .sort((a: any, b: any) => b.efficiencyScore - a.efficiencyScore || b.completed - a.completed)
+      .slice(0, 15);
+
     return {
       departmentStats,
-      leaderboard: [],
+      leaderboard,
       teamBenchmark: {
         totalWorkspaceTasks,
         totalCompleted,

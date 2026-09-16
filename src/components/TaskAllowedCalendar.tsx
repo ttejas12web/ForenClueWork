@@ -55,64 +55,14 @@ export interface StandardWorkspaceEvent {
 
 export interface TaskAllowedCalendarProps {
   tasks: CalendarTaskItem[];
+  events?: StandardWorkspaceEvent[];
   user?: any;
   onUpdateTaskStatus?: (taskId: string | number, newStatus: 'TODO' | 'IN_PROGRESS' | 'COMPLETED') => Promise<void> | void;
   onOpenDeliverable?: (task: CalendarTaskItem) => void;
   className?: string;
 }
 
-export const DEFAULT_STANDARD_EVENTS: StandardWorkspaceEvent[] = [
-  {
-    id: 'evt-01',
-    title: 'Weekly Digital Forensics & Incident Response Briefing',
-    date: '2026-08-26',
-    time: '10:00 AM - 11:30 AM IST',
-    location: 'Virtual Workspace Room Alpha',
-    attendees: 'All Forensic Wings & Volunteers',
-    category: 'Briefing',
-    description: 'Review of current active case studies, artifact triage protocols, and sprint deliverable milestones.'
-  },
-  {
-    id: 'evt-02',
-    title: 'Memory Dump & Volatile RAM Analysis Workshop',
-    date: '2026-08-28',
-    time: '03:00 PM - 04:30 PM IST',
-    location: 'Forensics Lab Server Room',
-    attendees: 'Cyber & Digital Forensics Wing',
-    category: 'Workshop',
-    description: 'Hands-on volatility plugins training, malware memory injection hunting, and chain of custody documentation.'
-  },
-  {
-    id: 'evt-03',
-    title: 'Bi-Weekly Volunteer & Campus Ambassador Sync',
-    date: '2026-08-29',
-    time: '05:00 PM - 06:00 PM IST',
-    location: 'Main Workspace Auditorium',
-    attendees: 'Volunteers & Campus Ambassadors',
-    category: 'Meeting',
-    description: 'Community engagement updates, upcoming cyber awareness workshops, and task recognition.'
-  },
-  {
-    id: 'evt-04',
-    title: 'Forensic Case Study Review: Advanced Phishing Campaign',
-    date: '2026-08-31',
-    time: '02:00 PM - 03:30 PM IST',
-    location: 'Case Room Beta',
-    attendees: 'Case Study & Research Teams',
-    category: 'Case Review',
-    description: 'Comprehensive post-mortem analysis of the corporate credential harvesting intrusion campaign.'
-  },
-  {
-    id: 'evt-05',
-    title: 'Evidence Packaging & Chain of Custody Standard Orientation',
-    date: '2026-09-04',
-    time: '11:00 AM - 12:30 PM IST',
-    location: 'Workspace Training Hall',
-    attendees: 'All Members',
-    category: 'Orientation',
-    description: 'ISO/IEC 27037 compliance guidelines for digital evidence acquisition and tamper-evident storage.'
-  }
-];
+export const DEFAULT_STANDARD_EVENTS: StandardWorkspaceEvent[] = [];
 
 export function parseStandardDate(dateStr?: string | null): Date | null {
   if (!dateStr || typeof dateStr !== 'string') return null;
@@ -177,18 +127,15 @@ export function formatDateKey(d: Date): string {
 
 export const TaskAllowedCalendar: React.FC<TaskAllowedCalendarProps> = ({
   tasks,
+  events = [],
   user,
   onUpdateTaskStatus,
   onOpenDeliverable,
   className = ''
 }) => {
   // Calendar Navigation State
-  const [currentDate, setCurrentDate] = useState<Date>(() => {
-    // Current workspace date is August 2026
-    return new Date(2026, 7, 25);
-  });
-
-  const [selectedDateKey, setSelectedDateKey] = useState<string>('2026-08-28');
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [selectedDateKey, setSelectedDateKey] = useState<string>(() => formatDateKey(new Date()));
   const [viewMode, setViewMode] = useState<'MONTH' | 'WEEK' | 'AGENDA'>('MONTH');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'TASKS' | 'EVENTS'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'COMPLETED' | 'OVERDUE'>('ALL');
@@ -215,13 +162,15 @@ export const TaskAllowedCalendar: React.FC<TaskAllowedCalendarProps> = ({
   };
 
   const handleToday = () => {
-    setCurrentDate(new Date(2026, 7, 25));
-    setSelectedDateKey('2026-08-25');
+    const today = new Date();
+    setCurrentDate(today);
+    setSelectedDateKey(formatDateKey(today));
   };
 
   // Map Tasks by Standard Date Key (YYYY-MM-DD)
   const tasksByDate = useMemo(() => {
     const map: Record<string, CalendarTaskItem[]> = {};
+    const todayKey = formatDateKey(new Date());
 
     tasks.forEach(task => {
       let dKey: string | null = null;
@@ -233,7 +182,7 @@ export const TaskAllowedCalendar: React.FC<TaskAllowedCalendarProps> = ({
       }
 
       // Default fallback if no date specified
-      const finalKey = dKey || '2026-08-28';
+      const finalKey = dKey || todayKey;
       if (!map[finalKey]) {
         map[finalKey] = [];
       }
@@ -247,7 +196,7 @@ export const TaskAllowedCalendar: React.FC<TaskAllowedCalendarProps> = ({
   const eventsByDate = useMemo(() => {
     const map: Record<string, StandardWorkspaceEvent[]> = {};
 
-    DEFAULT_STANDARD_EVENTS.forEach(evt => {
+    (events || []).forEach(evt => {
       const parsed = parseStandardDate(evt.date);
       const key = parsed ? formatDateKey(parsed) : evt.date;
       if (!map[key]) {
@@ -257,13 +206,14 @@ export const TaskAllowedCalendar: React.FC<TaskAllowedCalendarProps> = ({
     });
 
     return map;
-  }, []);
+  }, [events]);
 
   // Compute Days for the Month View Grid
   const calendarDays = useMemo(() => {
     const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     const prevMonthDays = new Date(currentYear, currentMonth, 0).getDate();
+    const todayKey = formatDateKey(new Date());
 
     const days: Array<{
       date: Date;
@@ -285,7 +235,7 @@ export const TaskAllowedCalendar: React.FC<TaskAllowedCalendarProps> = ({
         dateKey: key,
         isCurrentMonth: false,
         dayNumber: dayNum,
-        isToday: key === '2026-08-25',
+        isToday: key === todayKey,
         tasks: tasksByDate[key] || [],
         events: eventsByDate[key] || []
       });
@@ -300,7 +250,7 @@ export const TaskAllowedCalendar: React.FC<TaskAllowedCalendarProps> = ({
         dateKey: key,
         isCurrentMonth: true,
         dayNumber: dayNum,
-        isToday: key === '2026-08-25',
+        isToday: key === todayKey,
         tasks: tasksByDate[key] || [],
         events: eventsByDate[key] || []
       });
@@ -316,7 +266,7 @@ export const TaskAllowedCalendar: React.FC<TaskAllowedCalendarProps> = ({
         dateKey: key,
         isCurrentMonth: false,
         dayNumber: i,
-        isToday: key === '2026-08-25',
+        isToday: key === todayKey,
         tasks: tasksByDate[key] || [],
         events: eventsByDate[key] || []
       });
