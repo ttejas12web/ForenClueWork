@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Plus, 
   Filter, 
@@ -23,6 +23,8 @@ import {
   X,
   ExternalLink,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Upload,
   Image as ImageIcon,
   FileCode,
@@ -128,6 +130,61 @@ interface UploadedFileItem {
   storageProvider?: string;
 }
 
+const CALENDAR_MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const CALENDAR_MONTH_ABBRS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
+
+function formatDateToDisplay(date: Date): string {
+  const m = CALENDAR_MONTH_ABBRS[date.getMonth()];
+  const d = date.getDate();
+  const y = date.getFullYear();
+  return `${m} ${d}, ${y}`;
+}
+
+function formatDateToISO(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseDueDateString(str?: string | null): Date | null {
+  if (!str) return null;
+  const trimmed = str.trim();
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const m = parseInt(isoMatch[2], 10) - 1;
+    const d = parseInt(isoMatch[3], 10);
+    const dt = new Date(y, m, d);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+  const parsed = new Date(trimmed);
+  if (!isNaN(parsed.getTime())) return parsed;
+  return null;
+}
+
+function getDueCountdownLabel(dateStr: string): string | null {
+  const d = parseDueDateString(dateStr);
+  if (!d) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const target = new Date(d);
+  target.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Due Today';
+  if (diffDays === 1) return 'Due Tomorrow';
+  if (diffDays === -1) return '1 day overdue';
+  if (diffDays < -1) return `${Math.abs(diffDays)} days overdue`;
+  return `in ${diffDays} days`;
+}
+
 export const Tasks: React.FC = () => {
   const { user, token } = useAuthStore();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -196,12 +253,118 @@ export const Tasks: React.FC = () => {
   const [taskDesc, setTaskDesc] = useState('');
   const [taskPriority, setTaskPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'>('MEDIUM');
   const [taskDept, setTaskDept] = useState('Cyber & Digital Forensics');
-  const [taskDueDate, setTaskDueDate] = useState('Aug 28, 2026');
+  const [taskDueDate, setTaskDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return formatDateToDisplay(d);
+  });
+  const [calendarViewDate, setCalendarViewDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [taskMilestoneNote, setTaskMilestoneNote] = useState('');
   const [taskAssignedTo, setTaskAssignedTo] = useState<string>('');
   const [taskNotes, setTaskNotes] = useState('');
   const [memberSearchInModal, setMemberSearchInModal] = useState('');
   const [taskReferenceFile, setTaskReferenceFile] = useState<File | null>(null);
   const [taskReferenceFileInfo, setTaskReferenceFileInfo] = useState<{name: string, url: string, type: string} | null>(null);
+
+  // Quick preset helper for allotment calendar
+  const applyDatePreset = (daysOffset: number | 'endOfMonth') => {
+    const d = new Date();
+    if (daysOffset === 'endOfMonth') {
+      const end = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 0);
+      setTaskDueDate(formatDateToDisplay(end));
+      setCalendarViewDate(new Date(end.getFullYear(), end.getMonth(), 1));
+    } else {
+      d.setDate(d.getDate() + daysOffset);
+      setTaskDueDate(formatDateToDisplay(d));
+      setCalendarViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
+    }
+  };
+
+  // Calendar cells generation for Allot Task Modal
+  const calendarCells = useMemo(() => {
+    const year = calendarViewDate.getFullYear();
+    const month = calendarViewDate.getMonth();
+    
+    const firstDayIndex = new Date(year, month, 1).getDay(); // 0 = Sun
+    const daysInCurrentMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+    
+    const parsedSelected = parseDueDateString(taskDueDate);
+    const selectedIso = parsedSelected ? formatDateToISO(parsedSelected) : null;
+    const todayIso = formatDateToISO(new Date());
+
+    const cells: Array<{
+      dayNum: number;
+      date: Date;
+      iso: string;
+      isCurrentMonth: boolean;
+      isToday: boolean;
+      isSelected: boolean;
+      isPast: boolean;
+    }> = [];
+
+    // Prev month padding
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const dayNum = daysInPrevMonth - i;
+      const d = new Date(year, month - 1, dayNum);
+      const iso = formatDateToISO(d);
+      const isPast = d.setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0);
+      cells.push({
+        dayNum,
+        date: d,
+        iso,
+        isCurrentMonth: false,
+        isToday: iso === todayIso,
+        isSelected: iso === selectedIso,
+        isPast,
+      });
+    }
+
+    // Current month days
+    for (let dayNum = 1; dayNum <= daysInCurrentMonth; dayNum++) {
+      const d = new Date(year, month, dayNum);
+      const iso = formatDateToISO(d);
+      const isPast = d.setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0);
+      cells.push({
+        dayNum,
+        date: d,
+        iso,
+        isCurrentMonth: true,
+        isToday: iso === todayIso,
+        isSelected: iso === selectedIso,
+        isPast,
+      });
+    }
+
+    // Next month padding to round up to complete weeks (multiples of 7)
+    const remaining = (7 - (cells.length % 7)) % 7;
+    for (let dayNum = 1; dayNum <= remaining; dayNum++) {
+      const d = new Date(year, month + 1, dayNum);
+      const iso = formatDateToISO(d);
+      const isPast = d.setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0);
+      cells.push({
+        dayNum,
+        date: d,
+        iso,
+        isCurrentMonth: false,
+        isToday: iso === todayIso,
+        isSelected: iso === selectedIso,
+        isPast,
+      });
+    }
+
+    return cells;
+  }, [calendarViewDate, taskDueDate]);
+
+  // Selected date ISO string for native input sync
+  const selectedIsoValue = useMemo(() => {
+    const parsed = parseDueDateString(taskDueDate);
+    return parsed ? formatDateToISO(parsed) : '';
+  }, [taskDueDate]);
 
   const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
     setNotificationToast({ show: true, msg, type });
@@ -251,7 +414,13 @@ export const Tasks: React.FC = () => {
     setTaskDesc('');
     setTaskPriority('MEDIUM');
     setTaskDept(defaultDept);
-    setTaskDueDate('Aug 28, 2026');
+    
+    const defaultDue = new Date();
+    defaultDue.setDate(defaultDue.getDate() + 7);
+    setTaskDueDate(formatDateToDisplay(defaultDue));
+    setTaskMilestoneNote('');
+    setCalendarViewDate(new Date(defaultDue.getFullYear(), defaultDue.getMonth(), 1));
+
     const targetDeptClean = defaultDept.toLowerCase();
     const associatedMembers = members.filter(
       m => (typeof m.department === 'string' ? m.department.trim().toLowerCase() : '') === targetDeptClean
@@ -272,7 +441,31 @@ export const Tasks: React.FC = () => {
     setTaskPriority(task.priority);
     const dept = typeof task.department === 'string' && task.department.trim() ? task.department.trim() : 'Case Study';
     setTaskDept(dept);
-    setTaskDueDate(task.dueDate || 'Aug 28, 2026');
+    
+    if (task.dueDate) {
+      const parts = task.dueDate.split(' - ');
+      if (parts.length > 1) {
+        setTaskDueDate(parts[0].trim());
+        setTaskMilestoneNote(parts.slice(1).join(' - ').trim());
+      } else {
+        setTaskDueDate(task.dueDate);
+        setTaskMilestoneNote('');
+      }
+      const parsed = parseDueDateString(task.dueDate);
+      if (parsed) {
+        setCalendarViewDate(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
+      } else {
+        const d = new Date();
+        setCalendarViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
+      }
+    } else {
+      const defaultDue = new Date();
+      defaultDue.setDate(defaultDue.getDate() + 7);
+      setTaskDueDate(formatDateToDisplay(defaultDue));
+      setTaskMilestoneNote('');
+      setCalendarViewDate(new Date(defaultDue.getFullYear(), defaultDue.getMonth(), 1));
+    }
+
     setTaskAssignedTo(task.assignedTo ? String(task.assignedTo) : '');
     setTaskNotes(task.notes || '');
     setMemberSearchInModal('');
@@ -308,12 +501,17 @@ export const Tasks: React.FC = () => {
       
       const assignedUser = members.find(m => String(m.id) === String(taskAssignedTo));
       
+      let finalDueDate = taskDueDate.trim();
+      if (taskMilestoneNote.trim()) {
+        finalDueDate = `${finalDueDate} - ${taskMilestoneNote.trim()}`;
+      }
+
       const payload: Partial<FirestoreTask> = {
         title: taskTitle.trim(),
         description: taskDesc.trim(),
         priority: taskPriority as any,
         department: taskDept,
-        dueDate: taskDueDate.trim(),
+        dueDate: finalDueDate,
         assignedTo: taskAssignedTo || null,
         assignedUserName: assignedUser?.name,
         assignedUserEmail: assignedUser?.email,
@@ -710,10 +908,10 @@ export const Tasks: React.FC = () => {
       )}
 
       {/* Main Header Banner */}
-      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-2xs">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center space-x-2">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-200 shadow-2xs overflow-hidden w-full min-w-0">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 min-w-0 w-full">
+          <div className="space-y-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                 isSuperAdmin ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
               }`}>
@@ -727,17 +925,17 @@ export const Tasks: React.FC = () => {
                 <span>Encrypted Storage</span>
               </div>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
+            <h1 className="text-lg sm:text-2xl font-bold text-slate-900 break-words">
               {isSuperAdmin ? 'Workspace Task Allotment & Deliverables Tracker' : 'My Allotted Deliverables & Tasks'}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 max-w-2xl leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-500 max-w-2xl leading-relaxed break-words">
               {isSuperAdmin
                 ? 'Create, allot, and monitor live progress of forensic deliverables allotted to workspace members.'
                 : 'Tasks allotted specifically to you. Click "Start Working" to begin, and submit your completed deliverables and evidence files.'}
             </p>
           </div>
 
-          <div className="flex items-center space-x-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             {isSuperAdmin && (
               <>
                 <div
@@ -762,29 +960,29 @@ export const Tasks: React.FC = () => {
         </div>
 
         {/* Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6 pt-6 border-t border-slate-100">
-          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-            <p className="text-[11px] font-semibold text-slate-500">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-100 min-w-0 w-full">
+          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 min-w-0">
+            <p className="text-[11px] font-semibold text-slate-500 truncate">
               {isSuperAdmin ? 'Total Allotments' : 'My Total Tasks'}
             </p>
             <p className="text-xl font-bold text-slate-900 mt-0.5">{totalTasks}</p>
           </div>
-          <div className="bg-amber-50/60 rounded-xl p-3 border border-amber-100">
-            <p className="text-[11px] font-semibold text-amber-700">To Do</p>
+          <div className="bg-amber-50/60 rounded-xl p-3 border border-amber-100 min-w-0">
+            <p className="text-[11px] font-semibold text-amber-700 truncate">To Do</p>
             <p className="text-xl font-bold text-amber-900 mt-0.5">{todoTasks}</p>
           </div>
-          <div className="bg-blue-50/60 rounded-xl p-3 border border-blue-100">
-            <p className="text-[11px] font-semibold text-blue-700">In Progress</p>
+          <div className="bg-blue-50/60 rounded-xl p-3 border border-blue-100 min-w-0">
+            <p className="text-[11px] font-semibold text-blue-700 truncate">In Progress</p>
             <p className="text-xl font-bold text-blue-900 mt-0.5">{inProgressTasks}</p>
           </div>
-          <div className="bg-emerald-50/60 rounded-xl p-3 border border-emerald-100">
-            <p className="text-[11px] font-semibold text-emerald-700">Completed</p>
+          <div className="bg-emerald-50/60 rounded-xl p-3 border border-emerald-100 min-w-0">
+            <p className="text-[11px] font-semibold text-emerald-700 truncate">Completed</p>
             <p className="text-xl font-bold text-emerald-900 mt-0.5">{completedTasks}</p>
           </div>
           <button
             type="button"
             onClick={() => setShowExtensionsOnly(prev => !prev)}
-            className={`rounded-xl p-3 border text-left transition-all cursor-pointer ${
+            className={`col-span-2 sm:col-span-1 rounded-xl p-3 border text-left transition-all cursor-pointer min-w-0 ${
               showExtensionsOnly
                 ? 'bg-amber-100 border-amber-300 ring-2 ring-amber-400 shadow-xs'
                 : pendingExtensionsCount > 0
@@ -793,12 +991,12 @@ export const Tasks: React.FC = () => {
             }`}
           >
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-amber-800 flex items-center">
-                <CalendarClock className="h-3.5 w-3.5 mr-1 text-amber-600" />
+              <p className="text-[11px] font-semibold text-amber-800 flex items-center truncate">
+                <CalendarClock className="h-3.5 w-3.5 mr-1 text-amber-600 shrink-0" />
                 Extensions
               </p>
               {pendingExtensionsCount > 0 && (
-                <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
               )}
             </div>
             <p className="text-xl font-bold text-amber-900 mt-0.5">
@@ -847,10 +1045,10 @@ export const Tasks: React.FC = () => {
       )}
 
       {/* Control Bar: Filters & Search */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-2xs space-y-3 min-w-0 w-full">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0 w-full">
           {/* Status Tabs */}
-          <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl overflow-x-auto">
+          <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full scrollbar-none shrink-0 w-full lg:w-auto">
             {(['ALL', 'TODO', 'IN_PROGRESS', 'COMPLETED'] as const).map((status) => (
               <button
                 key={status}
@@ -885,15 +1083,17 @@ export const Tasks: React.FC = () => {
           </div>
 
           {/* Super Admin Filter by Assigned Member & Priority */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 min-w-0 w-full lg:w-auto">
             {isSuperAdmin && (
-              <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs">
-                <UserCheck className="h-3.5 w-3.5 text-slate-400" />
-                <span className="text-slate-500 font-medium">Allotted to:</span>
+              <div className="flex items-center justify-between sm:justify-start space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs min-w-0">
+                <div className="flex items-center space-x-1.5 shrink-0">
+                  <UserCheck className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-slate-500 font-medium">Allotted to:</span>
+                </div>
                 <select
                   value={selectedMemberFilter}
                   onChange={(e) => setSelectedMemberFilter(e.target.value)}
-                  className="bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer text-xs"
+                  className="bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer text-xs max-w-[170px] sm:max-w-[200px] truncate"
                 >
                   <option value="ALL">All Members</option>
                   {members.map((m) => (
@@ -905,13 +1105,15 @@ export const Tasks: React.FC = () => {
               </div>
             )}
 
-            <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs">
-              <Filter className="h-3.5 w-3.5 text-slate-400" />
-              <span className="text-slate-500 font-medium">Priority:</span>
+            <div className="flex items-center justify-between sm:justify-start space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs min-w-0">
+              <div className="flex items-center space-x-1.5 shrink-0">
+                <Filter className="h-3.5 w-3.5 text-slate-400" />
+                <span className="text-slate-500 font-medium">Priority:</span>
+              </div>
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
-                className="bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer text-xs"
+                className="bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer text-xs max-w-[130px] truncate"
               >
                 <option value="ALL">All Priorities</option>
                 <option value="URGENT">Urgent</option>
@@ -922,7 +1124,7 @@ export const Tasks: React.FC = () => {
             </div>
 
             {/* Search Input */}
-            <div className="relative flex-1 sm:w-60">
+            <div className="relative flex-1 min-w-0 w-full sm:w-60">
               <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -964,7 +1166,7 @@ export const Tasks: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-w-0 w-full">
           {filteredTasks.map((task) => {
             const isCompleted = task.status === 'COMPLETED' || task.status === 'SUBMITTED';
             const isInProgress = task.status === 'IN_PROGRESS';
@@ -985,7 +1187,7 @@ export const Tasks: React.FC = () => {
             return (
               <div
                 key={task.id}
-                className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-2xs flex flex-col justify-between transition-all hover:shadow-md relative overflow-hidden ${
+                className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-2xs flex flex-col justify-between transition-all hover:shadow-md relative overflow-hidden min-w-0 w-full break-words ${
                   celebratingTaskId === String(task.id)
                     ? 'border-emerald-400 ring-2 ring-emerald-300 shadow-md scale-[1.01]'
                     : isCompleted 
@@ -1055,7 +1257,7 @@ export const Tasks: React.FC = () => {
                         href={task.referenceAttachmentUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center space-x-1.5 px-3 py-2 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-xl text-blue-700 hover:text-blue-800 transition-colors cursor-pointer w-full max-w-xs overflow-hidden group"
+                        className="inline-flex items-center space-x-1.5 px-3 py-2 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-xl text-blue-700 hover:text-blue-800 transition-colors cursor-pointer w-full max-w-full overflow-hidden group"
                       >
                         <div className="h-6 w-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                           <Paperclip className="h-3 w-3" />
@@ -1413,9 +1615,9 @@ export const Tasks: React.FC = () => {
 
       {/* ================= ALLOT TASK MODAL (SUPER ADMIN) ================= */}
       {showAllotModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150 my-8">
-            <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-0 sm:my-8 max-h-[92dvh] sm:max-h-[88vh] flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
               <div className="flex items-center space-x-2">
                 <div className="h-7 w-7 rounded-lg bg-blue-600 text-white flex items-center justify-center">
                   <UserCheck className="h-4 w-4" />
@@ -1431,27 +1633,28 @@ export const Tasks: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowAllotModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg"
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-200 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveTask} className="p-4 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-              {/* Task Title */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Deliverable / Task Title *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                  placeholder="e.g. Volatile RAM Memory Dump Artifact Analysis"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
+            <form onSubmit={handleSaveTask} className="flex flex-col flex-1 overflow-hidden min-h-0">
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+                {/* Task Title */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Deliverable / Task Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    placeholder="e.g. Volatile RAM Memory Dump Artifact Analysis"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
 
               {/* Department & Priority */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1585,16 +1788,164 @@ export const Tasks: React.FC = () => {
                 />
               </div>
 
-              {/* Due Date */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Target Due Date / Milestone</label>
-                <input
-                  type="text"
-                  value={taskDueDate}
-                  onChange={(e) => setTaskDueDate(e.target.value)}
-                  placeholder="e.g. Aug 30, 2026 or Within 48 Hours"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
+              {/* Target Due Date / Milestone - Real Interactive Calendar */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+                    <Calendar className="h-4 w-4 text-blue-600" />
+                    <span>Target Due Date / Milestone *</span>
+                  </label>
+                  
+                  {taskDueDate && (
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                        {taskDueDate} {getDueCountdownLabel(taskDueDate) ? `• ${getDueCountdownLabel(taskDueDate)}` : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Presets Bar */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-0.5">
+                    Quick Presets:
+                  </span>
+                  {[
+                    { label: 'Today', offset: 0 },
+                    { label: 'Tomorrow', offset: 1 },
+                    { label: '+3 Days', offset: 3 },
+                    { label: '+1 Week', offset: 7 },
+                    { label: '+2 Weeks', offset: 14 },
+                    { label: 'End of Month', offset: 'endOfMonth' as const },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => applyDatePreset(p.offset)}
+                      className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 text-slate-700 rounded-lg border border-transparent transition-all cursor-pointer"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Real Calendar Box */}
+                <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-3.5 space-y-3 shadow-2xs">
+                  {/* Month Navigation & Controls */}
+                  <div className="flex items-center justify-between px-1">
+                    <button
+                      type="button"
+                      onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1))}
+                      className="p-1.5 hover:bg-white text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200/80 shadow-2xs transition-colors cursor-pointer"
+                      title="Previous Month"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-bold text-slate-800 tracking-wide">
+                        {CALENDAR_MONTH_NAMES[calendarViewDate.getMonth()]} {calendarViewDate.getFullYear()}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          setCalendarViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
+                          setTaskDueDate(formatDateToDisplay(now));
+                        }}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                      >
+                        Today
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1))}
+                      className="p-1.5 hover:bg-white text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200/80 shadow-2xs transition-colors cursor-pointer"
+                      title="Next Month"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Day Names Grid */}
+                  <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <span>Su</span>
+                    <span>Mo</span>
+                    <span>Tu</span>
+                    <span>We</span>
+                    <span>Th</span>
+                    <span>Fr</span>
+                    <span>Sa</span>
+                  </div>
+
+                  {/* Days Matrix */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {calendarCells.map((cell, idx) => {
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setTaskDueDate(formatDateToDisplay(cell.date));
+                            if (!cell.isCurrentMonth) {
+                              setCalendarViewDate(new Date(cell.date.getFullYear(), cell.date.getMonth(), 1));
+                            }
+                          }}
+                          className={`h-7.5 rounded-xl text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
+                            cell.isSelected
+                              ? 'bg-blue-600 text-white font-bold shadow-xs scale-105 ring-2 ring-blue-300'
+                              : cell.isToday
+                              ? 'border-2 border-blue-500 text-blue-700 font-bold bg-blue-50/70 hover:bg-blue-100'
+                              : cell.isCurrentMonth
+                              ? 'text-slate-800 hover:bg-white hover:text-blue-600 hover:shadow-2xs'
+                              : 'text-slate-400/80 hover:bg-white hover:text-slate-700'
+                          }`}
+                        >
+                          {cell.dayNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Precision Native Date Picker & Milestone Suffix */}
+                  <div className="pt-2.5 border-t border-slate-200/70 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        Exact Date Picker
+                      </label>
+                      <input
+                        type="date"
+                        value={selectedIsoValue}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val) {
+                            const parsed = parseDueDateString(val);
+                            if (parsed) {
+                              setTaskDueDate(formatDateToDisplay(parsed));
+                              setCalendarViewDate(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
+                            }
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        Milestone Tag / Phase (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={taskMilestoneNote}
+                        onChange={(e) => setTaskMilestoneNote(e.target.value)}
+                        placeholder="e.g. Milestone 1 / 48h Window"
+                        className="w-full px-2.5 py-1.5 text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Reference Attachment */}
@@ -1638,19 +1989,20 @@ export const Tasks: React.FC = () => {
                   )}
                 </div>
               </div>
+              </div>
 
-              <div className="pt-4 border-t border-slate-200 flex items-center justify-end space-x-2">
+              <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end space-x-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowAllotModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-5 py-2.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-1.5"
+                  className="px-5 py-2.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-1.5 min-h-[44px]"
                 >
                   <Send className="h-3.5 w-3.5" />
                   <span>{editingTask ? 'Update & Re-Allot' : 'Allot Task & Send Notification'}</span>
@@ -1663,9 +2015,9 @@ export const Tasks: React.FC = () => {
 
       {/* ================= SUBMIT DELIVERABLE & UPLOAD MODAL (FOR ALLOTTED MEMBER) ================= */}
       {showDeliverableModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150 my-8">
-            <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-0 sm:my-8 max-h-[92dvh] sm:max-h-[88vh] flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
               <div className="flex items-center space-x-2.5">
                 <div className="h-8 w-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
                   <Upload className="h-4 w-4" />
@@ -1677,13 +2029,14 @@ export const Tasks: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowDeliverableModal(null)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg"
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-200 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveDeliverableSubmission} className="p-4 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            <form onSubmit={handleSaveDeliverableSubmission} className="flex flex-col flex-1 overflow-hidden min-h-0">
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
               
               {/* Deliverable Notes / Findings Summary */}
               <div>
@@ -1802,23 +2155,24 @@ export const Tasks: React.FC = () => {
                   />
                 </div>
               </div>
+              </div>
 
               {/* Actions */}
-              <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-2">
+              <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end space-x-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowDeliverableModal(null)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading || isUploadingFiles}
-                  className="px-5 py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-1.5"
+                  className="px-5 py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-1.5 min-h-[44px]"
                 >
                   <Check className="h-3.5 w-3.5" />
-                  <span>Submit Deliverable & Mark Complete</span>
+                  <span>Submit Deliverable</span>
                 </button>
               </div>
             </form>
@@ -1828,9 +2182,9 @@ export const Tasks: React.FC = () => {
 
       {/* ================= VIEW DELIVERABLE DETAILS MODAL (FOR ADMIN & WORKER) ================= */}
       {viewDeliverableModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150 my-8">
-            <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-0 sm:my-8 max-h-[92dvh] sm:max-h-[88vh] flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
               <div className="flex items-center space-x-2.5">
                 <div className="h-8 w-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
                   <CheckCircle2 className="h-4 w-4" />
@@ -1842,13 +2196,13 @@ export const Tasks: React.FC = () => {
               </div>
               <button
                 onClick={() => setViewDeliverableModal(null)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg"
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-200 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
               
               {/* Assigned Member & Status Card */}
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
@@ -1967,11 +2321,11 @@ export const Tasks: React.FC = () => {
               )}
 
               {/* Modal Footer */}
-              <div className="pt-3 border-t border-slate-200 flex justify-end">
+              <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex justify-end shrink-0">
                 <button
                   type="button"
                   onClick={() => setViewDeliverableModal(null)}
-                  className="px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white rounded-xl cursor-pointer"
+                  className="px-5 py-2.5 text-xs font-bold bg-slate-800 hover:bg-slate-900 active:scale-95 text-white rounded-xl cursor-pointer min-h-[44px]"
                 >
                   Close Review
                 </button>

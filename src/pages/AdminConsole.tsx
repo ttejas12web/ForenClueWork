@@ -20,7 +20,10 @@ import {
   Mail,
   Fingerprint,
   Briefcase,
-  Save
+  Save,
+  Pencil,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 export const AdminConsole = () => {
@@ -154,6 +157,177 @@ export const AdminConsole = () => {
       console.error("Failed to save users:", err);
     } finally {
       setIsSavingUsers(false);
+    }
+  };
+
+  // Edit Member Modal State
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editForenclueId, setEditForenclueId] = useState('');
+  const [editRole, setEditRole] = useState<Role>('EMPLOYEE');
+  const [editDepartment, setEditDepartment] = useState('');
+  const [editDesignation, setEditDesignation] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editActive, setEditActive] = useState<boolean>(true);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
+
+  // Delete Member Confirmation State
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  // Toast State
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const isSelf = (u: User) => {
+    if (!user) return false;
+    return String(u.id) === String(user.id) || (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase());
+  };
+
+  const isMasterFounder = (u: User) => {
+    return (
+      u.forenclueId === 'FC-EMP-2026-001' ||
+      u.id === 'user_admin_001' ||
+      (u.email && u.email.toLowerCase() === 'ttapse12@gmail.com')
+    );
+  };
+
+  const handleOpenEditUser = (u: User) => {
+    setEditingUser(u);
+    setEditName(u.name || '');
+    setEditEmail(u.email || '');
+    setEditForenclueId(u.forenclueId || '');
+    setEditRole(u.role || 'EMPLOYEE');
+    setEditDepartment(u.department || 'Creative & Graphics');
+    setEditDesignation(u.designation || '');
+    setEditPhone(u.phone || '');
+    setEditPassword('');
+    setEditActive(u.active !== false);
+    setEditError('');
+    setEditSuccess('');
+  };
+
+  const handleSaveEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    if (!editName.trim()) {
+      setEditError('Member full name is required.');
+      return;
+    }
+    if (!editEmail.trim()) {
+      setEditError('Member email address is required.');
+      return;
+    }
+
+    setEditLoading(true);
+    setEditError('');
+    setEditSuccess('');
+
+    try {
+      const payload: any = {
+        name: editName.trim(),
+        email: editEmail.trim(),
+        forenclueId: editForenclueId.trim() || editingUser.forenclueId,
+        role: editRole,
+        department: editDepartment || null,
+        designation: editDesignation.trim() || null,
+        phone: editPhone.trim() || null,
+        active: editActive,
+      };
+
+      if (editPassword && editPassword.trim()) {
+        payload.password = editPassword.trim();
+      }
+
+      const res = await apiFetch(`/api/users/${editingUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to update member profile.');
+      }
+
+      setUsers(prev => prev.map(u => {
+        if (String(u.id) === String(editingUser.id)) {
+          return { ...u, ...payload };
+        }
+        return u;
+      }));
+
+      setEditSuccess(`Member details for ${editName} updated successfully.`);
+      showToast(`Updated member details for ${editName}.`);
+      setTimeout(() => {
+        setEditingUser(null);
+        setEditSuccess('');
+      }, 1200);
+    } catch (err: any) {
+      console.error('Error updating user:', err);
+      setEditError(err.message || 'Failed to update member details.');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleOpenDeleteUser = (u: User) => {
+    if (isSelf(u)) {
+      showToast('You cannot delete your own Super Admin account.', 'error');
+      return;
+    }
+    if (isMasterFounder(u)) {
+      showToast('Master Administrator cannot be deleted.', 'error');
+      return;
+    }
+    setDeletingUser(u);
+    setDeleteError('');
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!deletingUser) return;
+    if (isSelf(deletingUser)) {
+      setDeleteError('You cannot delete your own Super Admin account.');
+      return;
+    }
+
+    setDeleteLoading(true);
+    setDeleteError('');
+
+    try {
+      const res = await apiFetch(`/api/users/${deletingUser.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to delete member.');
+      }
+
+      const deletedName = deletingUser.name || 'Member';
+      setUsers(prev => prev.filter(u => String(u.id) !== String(deletingUser.id)));
+      showToast(`Member ${deletedName} was permanently removed from workspace.`);
+      setDeletingUser(null);
+    } catch (err: any) {
+      console.error('Error deleting user:', err);
+      setDeleteError(err.message || 'Failed to delete member from workspace.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -447,6 +621,269 @@ export const AdminConsole = () => {
         </div>
       )}
 
+      {/* Edit Member Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 border border-slate-200 animate-in fade-in zoom-in duration-150 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2.5">
+                <div className="h-8 w-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <Pencil className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">Edit Member Profile</h3>
+                  <p className="text-[11px] text-slate-500 font-mono">{editingUser.forenclueId}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setEditingUser(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="mt-3 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
+                <ShieldAlert className="h-4 w-4 flex-shrink-0" />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            {editSuccess && (
+              <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl flex items-center space-x-2">
+                <Check className="h-4 w-4 flex-shrink-0" />
+                <span>{editSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEditUser} className="space-y-3.5 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="e.g. Alex Sterling"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address *</label>
+                  <input
+                    type="email"
+                    required
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="e.g. alex@forenclue.com"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Role *</label>
+                  <select
+                    value={editRole}
+                    disabled={isMasterFounder(editingUser)}
+                    onChange={(e) => setEditRole(e.target.value as Role)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60"
+                  >
+                    <option value="VOLUNTEER">Volunteer (Junior Contributor)</option>
+                    <option value="EMPLOYEE">Employee (Forensic Specialist)</option>
+                    <option value="MENTOR">Mentor (Senior Advisor)</option>
+                    <option value="CAMPUS_AMBASSADOR">Campus Ambassador</option>
+                    <option value="SUPER_ADMIN">Super Admin</option>
+                  </select>
+                  {isMasterFounder(editingUser) && (
+                    <p className="text-[10px] text-amber-600 mt-0.5">Master administrator role is protected.</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Department</label>
+                  <select
+                    value={editDepartment}
+                    onChange={(e) => setEditDepartment(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Unassigned</option>
+                    {departmentsList.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Designation / Title</label>
+                  <input
+                    type="text"
+                    value={editDesignation}
+                    onChange={(e) => setEditDesignation(e.target.value)}
+                    placeholder="e.g. Lead Analyst, Researcher"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">ForenClue ID *</label>
+                    <button
+                      type="button"
+                      onClick={() => setEditForenclueId(generateForenclueId(editRole))}
+                      className="text-[10px] text-blue-600 hover:underline cursor-pointer"
+                    >
+                      Regenerate
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={editForenclueId}
+                    onChange={(e) => setEditForenclueId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Account Status</label>
+                  <select
+                    value={editActive ? 'active' : 'inactive'}
+                    onChange={(e) => setEditActive(e.target.value === 'active')}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="active">Active (Access Allowed)</option>
+                    <option value="inactive">Deactivated (Suspended)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reset Password <span className="text-slate-400 font-normal">(Leave blank to keep unchanged)</span>
+                </label>
+                <div className="relative">
+                  <Key className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    placeholder="Enter new password or leave blank"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading}
+                  className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition-all cursor-pointer disabled:opacity-60"
+                >
+                  {editLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Member Confirmation Modal */}
+      {deletingUser && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="h-10 w-10 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Delete Member</h3>
+                <p className="text-xs text-slate-500">Permanent action</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 mb-4 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900 text-xs">{deletingUser.name || 'Member'}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                  {(deletingUser.role || 'MEMBER').replace('_', ' ')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span className="font-mono">{deletingUser.forenclueId}</span>
+                <span>{deletingUser.department || 'No department'}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed mb-4">
+              Are you sure you want to permanently delete this member? They will lose all access to the ForenClue workspace and be removed from all channels.
+            </p>
+
+            {deleteError && (
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
+                <ShieldAlert className="h-4 w-4 flex-shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setDeletingUser(null)}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteUser}
+                disabled={deleteLoading}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition-all cursor-pointer disabled:opacity-60"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>{deleteLoading ? 'Deleting...' : 'Delete Member'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Toast */}
+      {toast && (
+        <div className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-lg border text-xs font-semibold flex items-center space-x-2 transition-all duration-200 animate-in fade-in slide-in-from-bottom-2 ${
+          toast.type === 'error'
+            ? 'bg-rose-50 border-rose-200 text-rose-800'
+            : 'bg-slate-900 border-slate-800 text-white'
+        }`}>
+          {toast.type === 'error' ? <AlertTriangle className="h-4 w-4 text-rose-500" /> : <Check className="h-4 w-4 text-emerald-400" />}
+          <span>{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-white cursor-pointer">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Tab 1: User Management */}
       {activeTab === 'users' && (
         <div className="space-y-4">
@@ -507,7 +944,7 @@ export const AdminConsole = () => {
                   <th className="px-5 py-3 text-left font-bold text-slate-600 uppercase tracking-wider">ForenClue ID</th>
                   <th className="px-5 py-3 text-left font-bold text-slate-600 uppercase tracking-wider">Department</th>
                   <th className="px-5 py-3 text-left font-bold text-slate-600 uppercase tracking-wider">Role</th>
-                  <th className="px-5 py-3 text-right font-bold text-slate-600 uppercase tracking-wider">Action</th>
+                  <th className="px-5 py-3 text-right font-bold text-slate-600 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -573,12 +1010,40 @@ export const AdminConsole = () => {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        <button
-                          onClick={() => handleCopy(`${u.forenclueId} / Forenclue@2026`)}
-                          className="text-blue-600 hover:text-blue-800 font-semibold text-xs cursor-pointer"
-                        >
-                          Copy Access
-                        </button>
+                        <div className="flex items-center justify-end space-x-1.5">
+                          <button
+                            onClick={() => handleCopy(`${u.forenclueId} / Forenclue@2026`)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="Copy Access Credentials"
+                          >
+                            {copiedId === `${u.forenclueId} / Forenclue@2026` ? (
+                              <Check className="h-3.5 w-3.5 text-emerald-600" />
+                            ) : (
+                              <Key className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditUser(u)}
+                            className="inline-flex items-center space-x-1 px-2.5 py-1 text-slate-700 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+                            title="Edit Member"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            onClick={() => handleOpenDeleteUser(u)}
+                            disabled={isSelf(u) || isMasterFounder(u)}
+                            className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                              isSelf(u) || isMasterFounder(u)
+                                ? 'text-slate-300 border border-slate-100 bg-slate-50/50 cursor-not-allowed'
+                                : 'text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 cursor-pointer'
+                            }`}
+                            title={isSelf(u) ? "You cannot delete your own account" : isMasterFounder(u) ? "Master admin cannot be deleted" : "Delete Member"}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     );
@@ -639,17 +1104,40 @@ export const AdminConsole = () => {
                         <button
                           onClick={() => handleCopy(u.forenclueId)}
                           className="text-slate-400 hover:text-blue-600 p-0.5"
+                          title="Copy ID"
                         >
                           {copiedId === u.forenclueId ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                         </button>
                       </div>
 
-                      <button
-                        onClick={() => handleCopy(`${u.forenclueId} / Forenclue@2026`)}
-                        className="text-blue-600 font-bold text-xs"
-                      >
-                        Copy Access
-                      </button>
+                      <div className="flex items-center space-x-1.5">
+                        <button
+                          onClick={() => handleCopy(`${u.forenclueId} / Forenclue@2026`)}
+                          className="p-1.5 text-slate-500 hover:text-blue-600 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer"
+                          title="Copy Access Credentials"
+                        >
+                          <Key className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditUser(u)}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 text-slate-700 hover:text-blue-700 bg-blue-50/60 border border-blue-200 rounded-lg text-xs font-semibold cursor-pointer"
+                        >
+                          <Pencil className="h-3 w-3 text-slate-500" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleOpenDeleteUser(u)}
+                          disabled={isSelf(u) || isMasterFounder(u)}
+                          className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+                            isSelf(u) || isMasterFounder(u)
+                              ? 'text-slate-300 border-slate-100 bg-slate-50 cursor-not-allowed'
+                              : 'text-rose-600 hover:text-rose-700 bg-rose-50 border-rose-200 cursor-pointer'
+                          }`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

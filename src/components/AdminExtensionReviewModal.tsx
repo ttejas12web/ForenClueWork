@@ -42,8 +42,8 @@ export const AdminExtensionReviewModal: React.FC<AdminExtensionReviewModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-6">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-0 sm:my-6 max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
         
         {/* Header */}
         <div className="flex items-start justify-between pb-3 border-b border-slate-100">

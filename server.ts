@@ -48,7 +48,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 import { initializeApp, getApps } from 'firebase/app';
-import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc, query, where } from 'firebase/firestore';
+import { initializeFirestore, collection, getDocs, setDoc, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
 
 // ----------------------------------------------------
 // WEB PUSH & BACKGROUND NOTIFICATIONS
@@ -291,6 +291,76 @@ app.post('/api/push/test', async (req, res) => {
   } catch (error: any) {
     console.error('Error sending test push notification:', error);
     res.status(500).json({ error: error?.message || 'Failed to send test push notification.' });
+  }
+});
+
+// ----------------------------------------------------
+// USER MANAGEMENT ENDPOINTS (SUPER ADMIN)
+// ----------------------------------------------------
+app.put('/api/users/:id/department', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { department } = req.body;
+    if (serverFirestoreDb) {
+      await updateDoc(doc(serverFirestoreDb, 'users', id), {
+        department: department || null,
+        updatedAt: new Date().toISOString()
+      });
+    }
+    res.json({ success: true, message: 'Department updated successfully.' });
+  } catch (error: any) {
+    console.error('Error updating user department:', error);
+    res.status(500).json({ error: error?.message || 'Failed to update department.' });
+  }
+});
+
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password, ...updates } = req.body;
+    if (serverFirestoreDb) {
+      const payload: any = {
+        ...updates,
+        updatedAt: new Date().toISOString()
+      };
+      if (password && typeof password === 'string' && password.trim()) {
+        payload.password = password.trim();
+        payload.isDefaultPassword = false;
+        payload.tempPasswordChanged = true;
+      }
+      await updateDoc(doc(serverFirestoreDb, 'users', id), payload);
+    }
+    res.json({ success: true, message: 'User updated successfully.' });
+  } catch (error: any) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: error?.message || 'Failed to update user.' });
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (serverFirestoreDb) {
+      await deleteDoc(doc(serverFirestoreDb, 'users', id));
+      // Cleanup member from chat groups
+      try {
+        const groupsSnap = await getDocs(collection(serverFirestoreDb, 'chat_groups'));
+        for (const gDoc of groupsSnap.docs) {
+          const gData = gDoc.data() as any;
+          if (Array.isArray(gData.memberIds) && gData.memberIds.includes(id)) {
+            await updateDoc(doc(serverFirestoreDb, 'chat_groups', gDoc.id), {
+              memberIds: gData.memberIds.filter((mId: string) => mId !== id)
+            });
+          }
+        }
+      } catch (grpErr) {
+        console.warn('Group cleanup notice:', grpErr);
+      }
+    }
+    res.json({ success: true, message: 'User deleted successfully.' });
+  } catch (error: any) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: error?.message || 'Failed to delete user.' });
   }
 });
 

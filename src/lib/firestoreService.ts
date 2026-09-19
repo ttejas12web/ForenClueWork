@@ -793,6 +793,21 @@ export async function updateFirestoreUserPassword(userId: string, newPassword: s
 export async function deleteFirestoreUser(userId: string): Promise<void> {
   try {
     await deleteDoc(doc(db, 'users', userId));
+
+    // Cleanup: remove user from chat groups
+    try {
+      const groupsCol = collection(db, 'chat_groups');
+      const snap = await getDocs(groupsCol);
+      for (const gDoc of snap.docs) {
+        const gData = gDoc.data() as FirestoreChatGroup;
+        if (Array.isArray(gData.memberIds) && gData.memberIds.includes(userId)) {
+          const newMemberIds = gData.memberIds.filter((id: string) => id !== userId);
+          await updateDoc(doc(db, 'chat_groups', gDoc.id), { memberIds: newMemberIds });
+        }
+      }
+    } catch (grpErr) {
+      console.warn('Chat group cleanup after user deletion note:', grpErr);
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `users/${userId}`);
     throw error;

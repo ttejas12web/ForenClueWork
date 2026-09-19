@@ -881,13 +881,13 @@ export const Chat = () => {
   });
 
   return (
-    <div className="h-[calc(100dvh-11rem)] sm:h-[calc(100dvh-8rem)] bg-white rounded-2xl shadow-sm border border-slate-200/90 overflow-hidden flex flex-col md:flex-row relative">
+    <div className="h-full min-h-[calc(100dvh-8rem)] md:min-h-0 bg-white rounded-none sm:rounded-2xl shadow-none sm:shadow-sm border-0 sm:border border-slate-200/90 overflow-hidden flex flex-col md:flex-row relative flex-1">
       
       {/* ================= COLUMN 1: GROUPS SIDEBAR ================= */}
       {/* On mobile: Hidden when an active group is selected. Visible when no active group. */}
       {/* On desktop (md+): Always visible as the left pane. */}
       <div 
-        className={`w-full md:w-80 lg:w-96 border-r border-slate-200/90 flex flex-col bg-slate-50/90 ${
+        className={`w-full md:w-80 lg:w-96 border-r border-slate-200/90 flex flex-col bg-slate-50/90 flex-1 md:flex-initial ${
           activeGroup ? 'hidden md:flex' : 'flex'
         }`}
       >
@@ -905,7 +905,7 @@ export const Chat = () => {
               <button
                 id="create-group-btn"
                 onClick={openCreateModal}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all transform active:scale-95 cursor-pointer min-h-[36px]"
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer min-h-[38px]"
                 title="Create a new Group with required members"
               >
                 <Plus className="h-4 w-4" />
@@ -922,7 +922,7 @@ export const Chat = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search groups, mentors or members..."
-              className="w-full pl-9 pr-3 py-2 bg-slate-100/90 border border-transparent rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-slate-400"
+              className="w-full pl-9 pr-3 py-2 bg-slate-100/90 border border-transparent rounded-xl text-sm sm:text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-slate-400"
             />
           </div>
         </div>
@@ -1051,7 +1051,7 @@ export const Chat = () => {
                 {/* Mobile Back Button */}
                 <button
                   onClick={() => setActiveGroup(null)}
-                  className="md:hidden p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors flex items-center justify-center min-h-[40px] min-w-[40px]"
+                  className="md:hidden p-2 -ml-1.5 text-slate-700 hover:text-slate-950 rounded-xl hover:bg-slate-100 active:bg-slate-200 transition-colors flex items-center justify-center min-h-[44px] min-w-[44px]"
                   aria-label="Back to channels list"
                 >
                   <ArrowLeft className="h-5 w-5" />
@@ -1086,7 +1086,7 @@ export const Chat = () => {
                 {/* Mobile Back Button */}
                 <button
                   onClick={() => setActiveGroup(null)}
-                  className="md:hidden p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors flex items-center justify-center min-h-[40px] min-w-[40px]"
+                  className="md:hidden p-2 -ml-1.5 text-slate-700 hover:text-slate-950 rounded-xl hover:bg-slate-100 active:bg-slate-200 transition-colors flex items-center justify-center min-h-[44px] min-w-[44px]"
                   aria-label="Back to channels list"
                 >
                   <ArrowLeft className="h-5 w-5" />
@@ -1384,10 +1384,10 @@ export const Chat = () => {
                 type="button"
                 onClick={() => messageFileInputRef.current?.click()}
                 disabled={isOffline}
-                className="p-2.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 disabled:opacity-40 rounded-xl transition-colors cursor-pointer flex-shrink-0"
+                className="p-2.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 active:scale-95 disabled:opacity-40 rounded-xl transition-all cursor-pointer flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
                 title={isOffline ? "Cannot attach files while offline" : "Attach file or image to send to Super Admin / Group"}
               >
-                <Paperclip className="h-4 w-4" />
+                <Paperclip className="h-5 w-5 sm:h-4 sm:w-4" />
               </button>
 
               <input
@@ -1396,21 +1396,21 @@ export const Chat = () => {
                 onChange={(e) => setMessageText(e.target.value)}
                 disabled={isOffline}
                 placeholder={isOffline ? "You are offline. Connect to network to send messages..." : `Message #${activeGroup.name} or add file attachment...`}
-                className="flex-1 px-3.5 sm:px-4 py-2.5 bg-slate-100 border border-transparent rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60 disabled:bg-slate-100 transition-all placeholder:text-slate-400"
+                className="flex-1 px-3.5 sm:px-4 py-2.5 bg-slate-100 border border-transparent rounded-xl text-sm sm:text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60 disabled:bg-slate-100 transition-all placeholder:text-slate-400 min-h-[44px]"
               />
               <button
                 type="submit"
                 disabled={(!messageText.trim() && !selectedFile) || isSending || isOffline}
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-semibold text-xs rounded-xl shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer min-h-[40px]"
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:opacity-40 text-white font-semibold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center space-x-1.5 cursor-pointer min-h-[44px] shrink-0"
               >
                 {isSending ? (
                   <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     <span className="hidden sm:inline">Sending...</span>
                   </>
                 ) : (
                   <>
-                    <Send className="h-3.5 w-3.5" />
+                    <Send className="h-4 w-4" />
                     <span className="hidden sm:inline">Send</span>
                   </>
                 )}

@@ -97,7 +97,7 @@ export const Dashboard: React.FC = () => {
         <div className="grid grid-cols-2 sm:flex items-center gap-1.5 bg-slate-800/90 p-1 rounded-xl">
           <button
             onClick={() => setAdminViewMode('EXECUTIVE')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center justify-center flex items-center space-x-1.5 ${
+            className={`px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer text-center justify-center flex items-center space-x-1.5 min-h-[40px] ${
               adminViewMode === 'EXECUTIVE'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-400 hover:text-white'
@@ -108,7 +108,7 @@ export const Dashboard: React.FC = () => {
           </button>
           <button
             onClick={() => setAdminViewMode('INFOGRAPHIC')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center justify-center flex items-center space-x-1.5 ${
+            className={`px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer text-center justify-center flex items-center space-x-1.5 min-h-[40px] ${
               adminViewMode === 'INFOGRAPHIC'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-400 hover:text-white'
@@ -147,14 +147,14 @@ export const Dashboard: React.FC = () => {
               <div className="flex flex-wrap items-center gap-3">
                 <Link
                   to="/admin"
-                  className="flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-sm transition-all transform active:scale-95 cursor-pointer"
+                  className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-sm transition-all transform active:scale-95 cursor-pointer min-h-[44px] flex-1 sm:flex-initial"
                 >
                   <ShieldCheck className="h-4 w-4" />
                   <span>Admin Console</span>
                 </Link>
                 <Link
                   to="/tasks"
-                  className="flex items-center space-x-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl text-xs font-semibold transition-all transform active:scale-95 cursor-pointer"
+                  className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl text-xs font-semibold transition-all transform active:scale-95 cursor-pointer min-h-[44px] flex-1 sm:flex-initial"
                 >
                   <CheckSquare className="h-4 w-4" />
                   <span>Tasks Board</span>
@@ -239,7 +239,7 @@ export const Dashboard: React.FC = () => {
               <div className="grid grid-cols-1 gap-2.5">
                 <Link
                   to="/tasks"
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all text-xs font-semibold text-slate-700 hover:text-blue-700"
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all active:scale-98 text-xs font-semibold text-slate-700 hover:text-blue-700 min-h-[44px]"
                 >
                   <div className="flex items-center space-x-2.5">
                     <CheckSquare className="h-4 w-4 text-blue-600" />
@@ -250,7 +250,7 @@ export const Dashboard: React.FC = () => {
 
                 <Link
                   to="/chat"
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all text-xs font-semibold text-slate-700 hover:text-blue-700"
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all active:scale-98 text-xs font-semibold text-slate-700 hover:text-blue-700 min-h-[44px]"
                 >
                   <div className="flex items-center space-x-2.5">
                     <MessageSquare className="h-4 w-4 text-indigo-600" />
@@ -261,7 +261,7 @@ export const Dashboard: React.FC = () => {
 
                 <Link
                   to="/teams"
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all text-xs font-semibold text-slate-700 hover:text-blue-700"
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all active:scale-98 text-xs font-semibold text-slate-700 hover:text-blue-700 min-h-[44px]"
                 >
                   <div className="flex items-center space-x-2.5">
                     <Users className="h-4 w-4 text-emerald-600" />
@@ -272,7 +272,7 @@ export const Dashboard: React.FC = () => {
 
                 <Link
                   to="/calendar"
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all text-xs font-semibold text-slate-700 hover:text-blue-700"
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all active:scale-98 text-xs font-semibold text-slate-700 hover:text-blue-700 min-h-[44px]"
                 >
                   <div className="flex items-center space-x-2.5">
                     <CalendarIcon className="h-4 w-4 text-amber-600" />
@@ -283,7 +283,7 @@ export const Dashboard: React.FC = () => {
 
                 <Link
                   to="/announcements"
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all text-xs font-semibold text-slate-700 hover:text-blue-700"
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all active:scale-98 text-xs font-semibold text-slate-700 hover:text-blue-700 min-h-[44px]"
                 >
                   <div className="flex items-center space-x-2.5">
                     <Megaphone className="h-4 w-4 text-rose-600" />

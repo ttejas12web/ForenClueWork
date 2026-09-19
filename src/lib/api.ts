@@ -3,7 +3,8 @@ import {
   fetchAllUsers, 
   createFirestoreUser, 
   updateFirestoreUserProfile, 
-  updateFirestoreUserPassword, 
+  updateFirestoreUserPassword,
+  deleteFirestoreUser, 
   fetchAllTasks, 
   createFirestoreTask, 
   updateFirestoreTask, 
@@ -120,6 +121,27 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
 
   if (endpoint === '/api/users' && method === 'GET') {
     return await fetchAllUsers();
+  }
+
+  if (endpoint.startsWith('/api/users/') && method === 'DELETE') {
+    const userId = endpoint.replace('/api/users/', '').split('/')[0];
+    await deleteFirestoreUser(userId);
+    return { success: true, message: 'User deleted successfully' };
+  }
+
+  if (endpoint.startsWith('/api/users/') && method === 'PUT') {
+    const parts = endpoint.replace('/api/users/', '').split('/');
+    const userId = parts[0];
+    if (parts[1] === 'department') {
+      await updateFirestoreUserProfile(userId, { department: body.department });
+      return { success: true, message: 'Department updated successfully' };
+    }
+    const { password, ...userUpdates } = body;
+    await updateFirestoreUserProfile(userId, userUpdates);
+    if (password && typeof password === 'string' && password.trim()) {
+      await updateFirestoreUserPassword(userId, password.trim());
+    }
+    return { success: true, message: 'User updated successfully' };
   }
 
   if (endpoint === '/api/auth/register' && method === 'POST') {

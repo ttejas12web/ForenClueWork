@@ -86,8 +86,10 @@ export const Layout = () => {
       : { name: 'Profile', path: '/profile', icon: User },
   ];
 
+  const isChatRoute = location.pathname.startsWith('/chat');
+
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-slate-100/90 text-slate-900 antialiased font-sans">
+    <div className="flex h-[100dvh] w-full max-w-full overflow-hidden bg-slate-100/90 text-slate-900 antialiased font-sans">
       {/* Desktop Sidebar */}
       <Sidebar 
         mobileMenuOpen={mobileMenuOpen} 
@@ -95,7 +97,7 @@ export const Layout = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 w-full max-w-full overflow-hidden">
         {/* Offline Connectivity Warning Banner */}
         <OfflineNetworkBanner />
 
@@ -106,15 +108,23 @@ export const Layout = () => {
         />
 
         {/* Page Viewport */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">
-          <div className="max-w-7xl mx-auto w-full">
+        <main className={cn(
+          "flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full",
+          isChatRoute 
+            ? "p-0 sm:p-4 lg:p-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6 flex flex-col" 
+            : "p-3 sm:p-5 lg:p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6"
+        )}>
+          <div className={cn(
+            "w-full min-w-0 mx-auto",
+            isChatRoute ? "h-full flex flex-col max-w-7xl" : "max-w-7xl"
+          )}>
             <Outlet />
           </div>
         </main>
 
         {/* Mobile Bottom Quick Navigation Bar (Visible on mobile screens < 768px) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-2 pb-[env(safe-area-inset-bottom)] flex items-center justify-around z-30 shadow-lg">
-          <div className="flex items-center justify-around w-full h-16">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200/90 px-3 pb-[env(safe-area-inset-bottom)] flex items-center justify-around z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+          <div className="flex items-center justify-around w-full h-16 max-w-lg mx-auto">
             {mobileNavItems.map((item) => {
               const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
               return (
@@ -122,19 +132,27 @@ export const Layout = () => {
                   key={item.name}
                   to={item.path}
                   className={cn(
-                    "flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl transition-all duration-150 min-h-[44px]",
+                    "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-2xl transition-all duration-200 min-h-[48px] relative active:scale-95",
                     isActive
                       ? "text-blue-600 font-bold"
-                      : "text-slate-500 hover:text-slate-800"
+                      : "text-slate-500 hover:text-slate-900"
                   )}
                 >
                   <div className={cn(
-                    "p-1 rounded-lg transition-colors",
-                    isActive ? "bg-blue-50 text-blue-600" : ""
+                    "px-3 py-1 rounded-xl transition-all flex items-center justify-center relative",
+                    isActive ? "bg-blue-50 text-blue-600 shadow-2xs scale-105" : "hover:bg-slate-100"
                   )}>
-                    <item.icon className="h-5 w-5" />
+                    <item.icon className={cn(
+                      "h-5 w-5 transition-transform",
+                      isActive ? "stroke-[2.5px]" : "stroke-[1.8px]"
+                    )} />
                   </div>
-                  <span className="text-[10px] tracking-tight mt-0.5">{item.name}</span>
+                  <span className={cn(
+                    "text-[10px] tracking-tight mt-0.5 transition-colors font-medium",
+                    isActive ? "text-blue-600 font-bold" : "text-slate-500"
+                  )}>
+                    {item.name}
+                  </span>
                 </Link>
               );
             })}

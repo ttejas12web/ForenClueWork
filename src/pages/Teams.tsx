@@ -262,12 +262,12 @@ export const Teams = () => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={loadMembersData}
             title="Refresh member lists"
-            className="p-2 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer flex items-center space-x-1"
+            className="p-2.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer flex items-center space-x-1 min-h-[44px]"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin text-blue-600' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
@@ -276,7 +276,7 @@ export const Teams = () => {
           {(user?.role === 'SUPER_ADMIN' || user?.role === 'MENTOR') && (
             <Link
               to="/admin"
-              className="flex items-center space-x-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+              className="flex items-center space-x-1.5 px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer min-h-[44px]"
             >
               <PlusCircle className="h-4 w-4" />
               <span>Manage Members</span>
@@ -285,7 +285,7 @@ export const Teams = () => {
 
           <Link
             to={`/chat?group=${encodeURIComponent(selectedDept)}`}
-            className="flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer min-h-[38px]"
+            className="flex items-center space-x-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer min-h-[44px]"
           >
             <MessageSquare className="h-4 w-4" />
             <span>Department Chat</span>
@@ -363,12 +363,12 @@ export const Teams = () => {
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                <div className="grid grid-cols-3 gap-2 pt-1">
                   <button
                     type="button"
                     id={`view-roster-btn-${dept.code}`}
                     onClick={(e) => handleViewRoster(dept.name, e)}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer ${
+                    className={`px-2 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1 transition-all active:scale-95 cursor-pointer min-h-[40px] ${
                       isSpecialDept
                         ? 'bg-amber-100/70 hover:bg-amber-200 text-amber-900'
                         : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -376,7 +376,7 @@ export const Teams = () => {
                     title={`View roster of members in ${dept.name}`}
                   >
                     <Users className="h-3.5 w-3.5" />
-                    <span>View Roster</span>
+                    <span>Roster</span>
                   </button>
 
                   <Link
@@ -385,7 +385,7 @@ export const Teams = () => {
                       : `/chat?directUser=${encodeURIComponent(dept.mentorId)}`
                     }
                     onClick={(e) => e.stopPropagation()}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer ${
+                    className={`px-2 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1 transition-all active:scale-95 cursor-pointer min-h-[40px] ${
                       isSpecialDept
                         ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs'
                         : 'bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700'
@@ -393,20 +393,20 @@ export const Teams = () => {
                     title={isSpecialDept ? 'Open chat with Lead Super Admin Mentor' : `Open 1-on-1 personal chat with ${dept.mentorName}`}
                   >
                     {isSpecialDept ? <Shield className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
-                    <span>{isSpecialDept ? 'Super Admins' : 'Mentor'}</span>
+                    <span>{isSpecialDept ? 'Mentors' : 'Mentor'}</span>
                   </Link>
 
                   <Link
                     to={`/chat?group=${encodeURIComponent(dept.name)}`}
                     onClick={(e) => e.stopPropagation()}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer ${
+                    className={`px-2 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1 transition-all active:scale-95 cursor-pointer min-h-[40px] ${
                       isSpecialDept
                         ? 'bg-amber-100/70 hover:bg-amber-200 text-amber-900'
                         : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                     }`}
                     title={`Open ${dept.name} Group Chat`}
                   >
-                    <MessageSquare className="h-3 w-3" />
+                    <MessageSquare className="h-3.5 w-3.5" />
                     <span>Chat</span>
                   </Link>
                 </div>
@@ -457,31 +457,31 @@ export const Teams = () => {
             {activeDeptData.name === 'Campus Ambassadors' ? (
               <Link
                 to={`/chat?directUser=${encodeURIComponent(effectiveSuperAdminMentors[0]?.forenclueId || 'FC-EMP-2026-001')}`}
-                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
+                className="px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs min-h-[44px]"
               >
-                <Shield className="h-3.5 w-3.5 text-amber-600" />
+                <Shield className="h-4 w-4 text-amber-600" />
                 <span>Message Lead Super Admin ({effectiveSuperAdminMentors[0]?.name || 'Tejas Tapse'})</span>
               </Link>
             ) : (
               <Link
                 to={`/chat?directUser=${encodeURIComponent(activeDeptData.mentorId)}`}
-                className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                className="px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 border border-blue-200/80 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer min-h-[44px]"
               >
-                <User className="h-3.5 w-3.5 text-blue-600" />
+                <User className="h-4 w-4 text-blue-600" />
                 <span>Message {activeDeptData.mentorName} (Mentor)</span>
               </Link>
             )}
 
             <Link
               to={`/chat?group=${encodeURIComponent(selectedDept)}`}
-              className={`px-3.5 py-2 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer ${
+              className={`px-4 py-2.5 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer min-h-[44px] ${
                 activeDeptData.name === 'Campus Ambassadors'
                   ? 'bg-amber-600 hover:bg-amber-700'
                   : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
-              <MessageSquare className="h-3.5 w-3.5" />
-              <span>Open {selectedDept} Chat Group</span>
+              <MessageSquare className="h-4 w-4" />
+              <span>Open {selectedDept} Chat</span>
               <ExternalLink className="h-3 w-3 ml-0.5 opacity-80" />
             </Link>
           </div>
@@ -590,14 +590,14 @@ export const Teams = () => {
               Assigned Department Members ({activeDeptMembers.length})
             </h3>
 
-            <div className="relative min-w-[240px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            <div className="relative min-w-[240px] w-full sm:w-auto">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search member name or ID..."
                 value={searchMember}
                 onChange={(e) => setSearchMember(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm sm:text-xs focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors min-h-[44px]"
               />
             </div>
           </div>
@@ -663,7 +663,7 @@ export const Teams = () => {
                   <Link
                     to={`/chat?directUser=${encodeURIComponent(member.forenclueId)}`}
                     title={`Open 1-on-1 chat with ${member.name}`}
-                    className="h-8 w-8 rounded-lg bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-600 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer"
+                    className="h-10 w-10 min-h-[44px] min-w-[44px] rounded-xl bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-600 flex items-center justify-center transition-all active:scale-95 flex-shrink-0 cursor-pointer border border-transparent hover:border-blue-200"
                   >
                     <MessageSquare className="h-4 w-4" />
                   </Link>
