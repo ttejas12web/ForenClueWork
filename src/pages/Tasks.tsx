@@ -33,7 +33,9 @@ import {
   Cloud,
   Eye,
   CalendarClock,
-  CalendarDays
+  CalendarDays,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import {
@@ -43,6 +45,7 @@ import {
   updateFirestoreTask,
   deleteFirestoreTask,
   submitTaskDeliverable,
+  reviewTaskDeliverable,
   uploadTaskAttachment,
   requestTaskExtension,
   approveTaskExtension,
@@ -62,6 +65,7 @@ import {
 } from '../components/TaskConfettiCelebration';
 import { TaskExtensionModal } from '../components/TaskExtensionModal';
 import { AdminExtensionReviewModal } from '../components/AdminExtensionReviewModal';
+import { AdminDeliverableReviewModal } from '../components/AdminDeliverableReviewModal';
 
 export interface WorkspaceTask {
   id: any;
@@ -91,6 +95,11 @@ export interface WorkspaceTask {
     uploadedAt?: string;
   }>;
   submittedAt?: string | null;
+  reviewStatus?: 'PENDING_REVIEW' | 'CHANGES_REQUESTED' | 'APPROVED' | null;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewFeedback?: string | null;
   extensionRequest?: TaskExtensionRequest | null;
   createdAt: string;
   updatedAt: string;
@@ -214,7 +223,7 @@ export const Tasks: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'TODO' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'TODO' | 'IN_PROGRESS' | 'UNDER_REVIEW' | 'COMPLETED'>('ALL');
   const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -233,6 +242,10 @@ export const Tasks: React.FC = () => {
 
   // View Deliverables Modal (For Admin & Member inspection)
   const [viewDeliverableModal, setViewDeliverableModal] = useState<WorkspaceTask | null>(null);
+
+  // Super Admin Deliverable Review QA Modal
+  const [adminDeliverableReviewTask, setAdminDeliverableReviewTask] = useState<WorkspaceTask | null>(null);
+  const [deliverableReviewProcessing, setDeliverableReviewProcessing] = useState(false);
 
 
   // Notifications Toast
@@ -390,7 +403,11 @@ export const Tasks: React.FC = () => {
         filtered = filtered.filter(t => String(t.assignedTo) === selectedMemberFilter);
       }
       if (statusFilter !== 'ALL') {
-        filtered = filtered.filter(t => t.status === statusFilter);
+        if (statusFilter === 'UNDER_REVIEW') {
+          filtered = filtered.filter(t => (t.status as string) === 'UNDER REVIEW' || (t.status as string) === 'UNDER_REVIEW' || t.reviewStatus === 'PENDING_REVIEW');
+        } else {
+          filtered = filtered.filter(t => t.status === statusFilter);
+        }
       }
       if (priorityFilter !== 'ALL') {
         filtered = filtered.filter(t => t.priority === priorityFilter);
@@ -398,7 +415,7 @@ export const Tasks: React.FC = () => {
       
       setTasks(filtered as unknown as WorkspaceTask[]);
       setLoading(false);
-    }, user.id, user.role);
+    }, user.id, user.role, user.forenclueId, user.email, user.name);
 
     return () => {
       unsubUsers();
@@ -725,12 +742,43 @@ export const Tasks: React.FC = () => {
       const modalTask = showDeliverableModal;
       setShowDeliverableModal(null);
       triggerCelebration(modalTask.id, modalTask.title);
-      showToast('Deliverable & evidence files submitted successfully! Task marked as completed.');
+      showToast('Deliverable & evidence submitted! Awaiting Super Admin review.');
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Failed to submit deliverable');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // Super Admin Review Action Confirmation
+  const handleConfirmDeliverableReview = async (decision: 'PERFECT' | 'CHANGES_REQUESTED', feedback: string) => {
+    if (!adminDeliverableReviewTask || !user) return;
+    try {
+      setDeliverableReviewProcessing(true);
+      await reviewTaskDeliverable(
+        adminDeliverableReviewTask.id,
+        decision,
+        { id: user.id, name: user.name },
+        feedback
+      );
+
+      if (decision === 'PERFECT') {
+        triggerCelebration(adminDeliverableReviewTask.id, adminDeliverableReviewTask.title);
+        showToast(`Deliverable approved as Perfect! Task "${adminDeliverableReviewTask.title}" marked completed.`);
+      } else {
+        showToast(`Changes requested for task "${adminDeliverableReviewTask.title}". Member notified.`);
+      }
+
+      setAdminDeliverableReviewTask(null);
+      if (viewDeliverableModal?.id === adminDeliverableReviewTask.id) {
+        setViewDeliverableModal(null);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to submit review decision');
+    } finally {
+      setDeliverableReviewProcessing(false);
     }
   };
 
@@ -860,8 +908,9 @@ export const Tasks: React.FC = () => {
   // Calculate quick stats
   const totalTasks = tasks.length;
   const todoTasks = tasks.filter(t => t.status === 'TODO').length;
-  const inProgressTasks = tasks.filter(t => t.status === 'IN_PROGRESS').length;
-  const completedTasks = tasks.filter(t => t.status === 'COMPLETED').length;
+  const inProgressTasks = tasks.filter(t => t.status === 'IN_PROGRESS' || t.reviewStatus === 'CHANGES_REQUESTED').length;
+  const underReviewTasks = tasks.filter(t => t.status === 'UNDER REVIEW' || (t.status as string) === 'UNDER_REVIEW' || t.reviewStatus === 'PENDING_REVIEW').length;
+  const completedTasks = tasks.filter(t => (t.status === 'COMPLETED' || t.status === 'SUBMITTED') && t.reviewStatus !== 'PENDING_REVIEW' && (t.status as string) !== 'UNDER_REVIEW').length;
   const pendingExtensionsCount = tasks.filter(t => t.extensionRequest?.status === 'PENDING').length;
 
   // Department-associated members in the modal
@@ -960,7 +1009,7 @@ export const Tasks: React.FC = () => {
         </div>
 
         {/* Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-100 min-w-0 w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-100 min-w-0 w-full">
           <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 min-w-0">
             <p className="text-[11px] font-semibold text-slate-500 truncate">
               {isSuperAdmin ? 'Total Allotments' : 'My Total Tasks'}
@@ -975,6 +1024,34 @@ export const Tasks: React.FC = () => {
             <p className="text-[11px] font-semibold text-blue-700 truncate">In Progress</p>
             <p className="text-xl font-bold text-blue-900 mt-0.5">{inProgressTasks}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setStatusFilter(prev => prev === 'UNDER_REVIEW' ? 'ALL' : 'UNDER_REVIEW');
+              if (showExtensionsOnly) setShowExtensionsOnly(false);
+            }}
+            className={`rounded-xl p-3 border text-left transition-all cursor-pointer min-w-0 ${
+              statusFilter === 'UNDER_REVIEW'
+                ? 'bg-indigo-100 border-indigo-300 ring-2 ring-indigo-400 shadow-xs'
+                : underReviewTasks > 0
+                ? 'bg-indigo-50/90 border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300'
+                : 'bg-slate-50 border-slate-100 opacity-70 hover:opacity-100'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-indigo-800 flex items-center truncate">
+                <ShieldCheck className="h-3.5 w-3.5 mr-1 text-indigo-600 shrink-0" />
+                Under Review
+              </p>
+              {underReviewTasks > 0 && (
+                <span className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse shrink-0" />
+              )}
+            </div>
+            <p className="text-xl font-bold text-indigo-900 mt-0.5">
+              {underReviewTasks}
+              <span className="text-[10px] font-normal text-indigo-700 ml-1">pending</span>
+            </p>
+          </button>
           <div className="bg-emerald-50/60 rounded-xl p-3 border border-emerald-100 min-w-0">
             <p className="text-[11px] font-semibold text-emerald-700 truncate">Completed</p>
             <p className="text-xl font-bold text-emerald-900 mt-0.5">{completedTasks}</p>
@@ -982,7 +1059,7 @@ export const Tasks: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowExtensionsOnly(prev => !prev)}
-            className={`col-span-2 sm:col-span-1 rounded-xl p-3 border text-left transition-all cursor-pointer min-w-0 ${
+            className={`rounded-xl p-3 border text-left transition-all cursor-pointer min-w-0 ${
               showExtensionsOnly
                 ? 'bg-amber-100 border-amber-300 ring-2 ring-amber-400 shadow-xs'
                 : pendingExtensionsCount > 0
@@ -1006,6 +1083,46 @@ export const Tasks: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Super Admin Pending Deliverable Reviews Banner */}
+      {underReviewTasks > 0 && (
+        <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/15 to-blue-500/10 border border-indigo-300/90 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <div className="h-10 w-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-md tracking-wider">
+                  {isSuperAdmin ? 'QA REVIEW REQUIRED' : 'DELIVERABLES IN REVIEW'}
+                </span>
+                <span className="text-xs font-bold text-indigo-950">
+                  {underReviewTasks} Deliverable{underReviewTasks > 1 ? 's' : ''} Submitted & Awaiting Super Admin Review
+                </span>
+              </div>
+              <p className="text-xs text-indigo-800/90 mt-0.5">
+                {isSuperAdmin
+                  ? 'Members completed allotted tasks (with media files or written findings). Review submissions to approve as perfect or tell for changes.'
+                  : 'Your submitted deliverables are currently under Super Admin evaluation.'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setStatusFilter(prev => prev === 'UNDER_REVIEW' ? 'ALL' : 'UNDER_REVIEW');
+              if (showExtensionsOnly) setShowExtensionsOnly(false);
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer shadow-xs ${
+              statusFilter === 'UNDER_REVIEW'
+                ? 'bg-slate-900 text-white hover:bg-slate-800'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-600/20'
+            }`}
+          >
+            {statusFilter === 'UNDER_REVIEW' ? 'Show All Deliverables' : `Filter Pending Reviews (${underReviewTasks})`}
+          </button>
+        </div>
+      )}
 
       {/* Super Admin / Workspace Pending Extensions Banner */}
       {pendingExtensionsCount > 0 && (
@@ -1049,20 +1166,31 @@ export const Tasks: React.FC = () => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0 w-full">
           {/* Status Tabs */}
           <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full scrollbar-none shrink-0 w-full lg:w-auto">
-            {(['ALL', 'TODO', 'IN_PROGRESS', 'COMPLETED'] as const).map((status) => (
+            {(['ALL', 'TODO', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED'] as const).map((status) => (
               <button
                 key={status}
                 onClick={() => {
                   setStatusFilter(status);
                   if (showExtensionsOnly) setShowExtensionsOnly(false);
                 }}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg whitespace-nowrap transition-all cursor-pointer flex items-center space-x-1.5 ${
                   statusFilter === status && !showExtensionsOnly
                     ? 'bg-white text-blue-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {status === 'ALL' ? 'All Deliverables' : status.replace('_', ' ')}
+                <span>
+                  {status === 'ALL'
+                    ? 'All Deliverables'
+                    : status === 'UNDER_REVIEW'
+                    ? 'Under Review'
+                    : status.replace('_', ' ')}
+                </span>
+                {status === 'UNDER_REVIEW' && underReviewTasks > 0 && (
+                  <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-indigo-100 text-indigo-800">
+                    {underReviewTasks}
+                  </span>
+                )}
               </button>
             ))}
 
@@ -1168,8 +1296,11 @@ export const Tasks: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-w-0 w-full">
           {filteredTasks.map((task) => {
-            const isCompleted = task.status === 'COMPLETED' || task.status === 'SUBMITTED';
-            const isInProgress = task.status === 'IN_PROGRESS';
+            const isUnderReview = task.status === 'UNDER REVIEW' || task.status === 'UNDER_REVIEW' || task.reviewStatus === 'PENDING_REVIEW';
+            const isChangesRequested = task.reviewStatus === 'CHANGES_REQUESTED';
+            const isApprovedPerfect = task.reviewStatus === 'APPROVED';
+            const isCompleted = (task.status === 'COMPLETED' || task.status === 'SUBMITTED') && !isUnderReview;
+            const isInProgress = task.status === 'IN_PROGRESS' || isChangesRequested;
             const isTodo = task.status === 'TODO';
 
             // Check if currently logged in user is the worker/allotted member of this task
@@ -1181,7 +1312,7 @@ export const Tasks: React.FC = () => {
             );
 
             // Progress percentage
-            const progressPct = task.progress ?? (isCompleted ? 100 : isInProgress ? 50 : 0);
+            const progressPct = task.progress ?? (isCompleted ? 100 : isUnderReview ? 90 : isInProgress ? 50 : 0);
             const hasDeliverableFiles = (task.deliverableFiles && task.deliverableFiles.length > 0) || Boolean(task.deliverableAttachmentUrl);
 
             return (
@@ -1190,11 +1321,15 @@ export const Tasks: React.FC = () => {
                 className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-2xs flex flex-col justify-between transition-all hover:shadow-md relative overflow-hidden min-w-0 w-full break-words ${
                   celebratingTaskId === String(task.id)
                     ? 'border-emerald-400 ring-2 ring-emerald-300 shadow-md scale-[1.01]'
-                    : isCompleted 
-                      ? 'border-emerald-200 bg-emerald-50/15' 
-                      : isInProgress
-                        ? 'border-blue-200 ring-1 ring-blue-100'
-                        : 'border-slate-200 hover:border-blue-300'
+                    : isChangesRequested
+                      ? 'border-rose-300 bg-rose-50/15 ring-1 ring-rose-200'
+                      : isUnderReview
+                        ? 'border-indigo-300 bg-indigo-50/15 ring-1 ring-indigo-200'
+                        : isCompleted 
+                          ? 'border-emerald-200 bg-emerald-50/15' 
+                          : isInProgress
+                            ? 'border-blue-200 ring-1 ring-blue-100'
+                            : 'border-slate-200 hover:border-blue-300'
                 }`}
               >
                 {/* Highlight celebration shimmer on completion */}
@@ -1217,14 +1352,42 @@ export const Tasks: React.FC = () => {
                       {task.priority} PRIORITY
                     </span>
 
-                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full transition-colors ${
-                      isCompleted
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : isInProgress
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-slate-100 text-slate-700'
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full transition-colors flex items-center space-x-1 ${
+                      isChangesRequested
+                        ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                        : isUnderReview
+                          ? 'bg-indigo-100 text-indigo-800 border border-indigo-200 animate-pulse'
+                          : isApprovedPerfect
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : isCompleted
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : isInProgress
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-slate-100 text-slate-700'
                     }`}>
-                      {task.status.replace('_', ' ')}
+                      {isChangesRequested ? (
+                        <>
+                          <AlertTriangle className="h-3 w-3 mr-0.5 text-rose-600" />
+                          <span>Changes Requested</span>
+                        </>
+                      ) : isUnderReview ? (
+                        <>
+                          <ShieldCheck className="h-3 w-3 mr-0.5 text-indigo-600" />
+                          <span>Under QA Review</span>
+                        </>
+                      ) : isApprovedPerfect ? (
+                        <>
+                          <CheckCircle2 className="h-3 w-3 mr-0.5 text-emerald-600" />
+                          <span>Verified Perfect</span>
+                        </>
+                      ) : isCompleted ? (
+                        <>
+                          <Check className="h-3 w-3 mr-0.5 text-emerald-600" />
+                          <span>Completed</span>
+                        </>
+                      ) : (
+                        <span>{task.status.replace('_', ' ')}</span>
+                      )}
                     </span>
                   </div>
 
@@ -1344,32 +1507,117 @@ export const Tasks: React.FC = () => {
                   </div>
 
                   {/* Deliverable Evidence Preview Pill (If submitted or attachments exist) */}
-                  {(task.deliverableNotes || task.notes || hasDeliverableFiles) && (
-                    <div className="mt-2.5 p-2.5 bg-emerald-50/80 rounded-xl border border-emerald-100 text-[11px] text-emerald-950">
+                  {(task.deliverableNotes || task.notes || hasDeliverableFiles || isUnderReview || isChangesRequested || isApprovedPerfect) && (
+                    <div className={`mt-2.5 p-2.5 rounded-xl border text-[11px] ${
+                      isChangesRequested
+                        ? 'bg-rose-50/90 border-rose-200 text-rose-950'
+                        : isUnderReview
+                          ? 'bg-indigo-50/90 border-indigo-200 text-indigo-950'
+                          : isApprovedPerfect
+                            ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
+                            : 'bg-emerald-50/80 border-emerald-100 text-emerald-950'
+                    }`}>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold flex items-center gap-1 text-emerald-800">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Deliverable Submitted:
+                        <span className={`font-bold flex items-center gap-1 ${
+                          isChangesRequested ? 'text-rose-800' : isUnderReview ? 'text-indigo-800' : 'text-emerald-800'
+                        }`}>
+                          {isChangesRequested ? (
+                            <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                          ) : isUnderReview ? (
+                            <Clock className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                          ) : (
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                          )}
+                          <span>
+                            {isChangesRequested
+                              ? 'Changes Requested by Super Admin'
+                              : isUnderReview
+                              ? 'Deliverable Under Super Admin Review'
+                              : isApprovedPerfect
+                              ? 'Deliverable Approved (Verified Perfect)'
+                              : 'Deliverable Submitted'}
+                          </span>
                         </span>
-                        {hasDeliverableFiles && (
-                          <span className="text-[10px] text-emerald-700 bg-emerald-100/60 px-1.5 py-0.5 rounded font-mono">
-                            {task.deliverableFiles?.length || 1} file(s) attached
+                        {hasDeliverableFiles ? (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                            isChangesRequested
+                              ? 'bg-rose-100 text-rose-800'
+                              : isUnderReview
+                              ? 'bg-indigo-100 text-indigo-800'
+                              : 'bg-emerald-100/60 text-emerald-700'
+                          }`}>
+                            {task.deliverableFiles?.length || 1} file(s)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 bg-white/70 px-1.5 py-0.5 rounded">
+                            Text deliverable
                           </span>
                         )}
                       </div>
+
+                      {/* Super Admin Review Feedback message if changes requested */}
+                      {isChangesRequested && task.reviewFeedback && (
+                        <div className="my-2 p-2.5 bg-white rounded-lg border border-rose-200 text-xs shadow-2xs">
+                          <p className="font-bold text-[10px] text-rose-700 uppercase tracking-wide flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            <span>Super Admin Revision Instructions:</span>
+                          </p>
+                          <p className="italic text-rose-950 text-[11px] mt-1 leading-relaxed">
+                            "{task.reviewFeedback}"
+                          </p>
+                          {isAllottedWorker && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDeliverableModal(task)}
+                              className="mt-2 px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center space-x-1"
+                            >
+                              <Upload className="h-3 w-3" />
+                              <span>Update Deliverable & Media Now</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Super Admin QA Note if approved */}
+                      {isApprovedPerfect && task.reviewFeedback && (
+                        <div className="my-1.5 p-2 bg-white/80 rounded-lg border border-emerald-200 text-[10px] text-emerald-900 flex items-start space-x-1.5">
+                          <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold">Super Admin QA: </span>
+                            <span className="italic">{task.reviewFeedback}</span>
+                          </div>
+                        </div>
+                      )}
+
                       {task.deliverableNotes || task.notes ? (
-                        <p className="line-clamp-2 italic text-emerald-900/90 text-[11px]">
+                        <p className="line-clamp-2 italic text-[11px] opacity-90 mt-1">
                           {task.deliverableNotes || task.notes}
                         </p>
                       ) : null}
                       
-                      <button
-                        type="button"
-                        onClick={() => setViewDeliverableModal(task)}
-                        className="mt-1.5 text-[10px] font-bold text-emerald-800 hover:text-emerald-900 flex items-center space-x-1 cursor-pointer"
-                      >
-                        <Eye className="h-3 w-3" />
-                        <span>Inspect Files & Notes</span>
-                      </button>
+                      <div className="mt-2 flex items-center justify-between gap-2 pt-1 border-t border-black/5">
+                        <button
+                          type="button"
+                          onClick={() => setViewDeliverableModal(task)}
+                          className={`text-[10px] font-bold flex items-center space-x-1 cursor-pointer ${
+                            isChangesRequested ? 'text-rose-800 hover:text-rose-900' : isUnderReview ? 'text-indigo-800 hover:text-indigo-900' : 'text-emerald-800 hover:text-emerald-900'
+                          }`}
+                        >
+                          <Eye className="h-3 w-3" />
+                          <span>Inspect Deliverables & Media</span>
+                        </button>
+
+                        {(isSuperAdmin || isAdmin) && (
+                          <button
+                            type="button"
+                            onClick={() => setAdminDeliverableReviewTask(task)}
+                            className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-[10px] font-bold cursor-pointer flex items-center space-x-1 shadow-2xs transition-all"
+                          >
+                            <ShieldCheck className="h-3 w-3" />
+                            <span>Review (QA)</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1488,7 +1736,37 @@ export const Tasks: React.FC = () => {
                           </button>
                         )}
 
-                        {isInProgress && (
+                        {isChangesRequested && (
+                          <div className="flex items-center space-x-1.5 flex-1">
+                            <button
+                              id={`btn-resubmit-deliverable-${task.id}`}
+                              onClick={() => handleOpenDeliverableModal(task)}
+                              className="flex-1 px-3 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center space-x-1.5 shadow-xs"
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              <span>Update & Resubmit</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {isUnderReview && (
+                          <div className="flex items-center space-x-1.5 flex-1">
+                            <span className="flex-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold rounded-xl flex items-center justify-center space-x-1">
+                              <Clock className="h-3.5 w-3.5 text-indigo-600" />
+                              <span>Under QA Review</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDeliverableModal(task)}
+                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer shrink-0"
+                              title="Update submission notes or files"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        )}
+
+                        {isInProgress && !isUnderReview && !isChangesRequested && (
                           <div className="flex items-center space-x-1.5 flex-1">
                             <button
                               id={`btn-submit-deliverable-${task.id}`}
@@ -1496,7 +1774,7 @@ export const Tasks: React.FC = () => {
                               className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center space-x-1.5 shadow-xs"
                             >
                               <Upload className="h-3.5 w-3.5" />
-                              <span>Submit & Complete</span>
+                              <span>Submit Deliverable</span>
                             </button>
                             <button
                               onClick={() => handleToggleComplete(task)}
@@ -1528,7 +1806,7 @@ export const Tasks: React.FC = () => {
                         )}
 
                         {/* Request Extension with Calendar Option for Allotted Member */}
-                        {!isCompleted && (
+                        {!isCompleted && !isUnderReview && (
                           <button
                             type="button"
                             onClick={() => handleOpenExtensionModal(task)}
@@ -1544,14 +1822,44 @@ export const Tasks: React.FC = () => {
                       /* SCENARIO 2: ADMIN / SUPER ADMIN VIEWING TASKS ALLOTTED TO OTHER MEMBERS */
                       <div className="flex items-center justify-between flex-1">
                         <div className="flex items-center space-x-1.5">
-                          {isCompleted ? (
+                          {isUnderReview ? (
                             <button
-                              onClick={() => setViewDeliverableModal(task)}
-                              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center space-x-1"
+                              type="button"
+                              onClick={() => setAdminDeliverableReviewTask(task)}
+                              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center space-x-1.5 shadow-sm shadow-indigo-600/25"
+                              title="Review Member Submission (Mark Perfect or Request Changes)"
                             >
-                              <Eye className="h-3 w-3 text-emerald-600" />
-                              <span>View Deliverable</span>
+                              <ShieldCheck className="h-4 w-4" />
+                              <span>Review Deliverable (QA)</span>
                             </button>
+                          ) : isCompleted ? (
+                            <div className="flex items-center space-x-1">
+                              <button
+                                onClick={() => setViewDeliverableModal(task)}
+                                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center space-x-1"
+                              >
+                                <Eye className="h-3 w-3 text-emerald-600" />
+                                <span>Deliverable</span>
+                              </button>
+                              {isSuperAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => setAdminDeliverableReviewTask(task)}
+                                  className="px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center space-x-1"
+                                  title="Re-evaluate QA review"
+                                >
+                                  <ShieldCheck className="h-3 w-3 text-indigo-600" />
+                                  <span>QA</span>
+                                </button>
+                              )}
+                            </div>
+                          ) : isChangesRequested ? (
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-[11px] font-semibold text-rose-700 flex items-center space-x-1 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200">
+                                <AlertTriangle className="h-3 w-3 text-rose-600" />
+                                <span>Awaiting member revision...</span>
+                              </span>
+                            </div>
                           ) : (
                             <div className="flex items-center space-x-2">
                               <span className="text-[11px] font-semibold text-slate-500 flex items-center space-x-1">
@@ -2321,7 +2629,23 @@ export const Tasks: React.FC = () => {
               )}
 
               {/* Modal Footer */}
-              <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex justify-end shrink-0">
+              <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+                {(isSuperAdmin || isAdmin) ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = viewDeliverableModal;
+                      setViewDeliverableModal(null);
+                      setAdminDeliverableReviewTask(t);
+                    }}
+                    className="px-4 py-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl cursor-pointer flex items-center space-x-1.5 min-h-[44px] shadow-sm shadow-indigo-600/20 transition-all"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>Evaluate & Review (QA)</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
                 <button
                   type="button"
                   onClick={() => setViewDeliverableModal(null)}
@@ -2360,6 +2684,17 @@ export const Tasks: React.FC = () => {
           onClose={() => setAdminReviewModal(null)}
           onConfirm={handleAdminReviewConfirm}
           isProcessing={extensionSubmitting}
+        />
+      )}
+
+      {/* ================= SUPER ADMIN DELIVERABLE REVIEW MODAL (QA: PERFECT OR REQUEST CHANGES) ================= */}
+      {adminDeliverableReviewTask && (
+        <AdminDeliverableReviewModal
+          task={adminDeliverableReviewTask}
+          isOpen={Boolean(adminDeliverableReviewTask)}
+          onClose={() => setAdminDeliverableReviewTask(null)}
+          onConfirmReview={handleConfirmDeliverableReview}
+          isProcessing={deliverableReviewProcessing}
         />
       )}
 

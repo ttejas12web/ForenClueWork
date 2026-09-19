@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { apiFetch } from '../lib/api';
 import { UserNetworkTag } from '../components/UserNetworkTag';
+import { subscribeToTasks, isTaskAssignedToMember, FirestoreTask } from '../lib/firestoreService';
 import { 
   Mail, 
   Hash, 
@@ -47,7 +48,7 @@ import {
 } from '../lib/pushNotifications';
 
 interface TaskItem {
-  id: number;
+  id: string | number;
   title: string;
   description: string;
   priority: string;
@@ -55,6 +56,10 @@ interface TaskItem {
   dueDate?: string;
   department?: string;
   notes?: string;
+  deliverableNotes?: string;
+  deliverableLink?: string;
+  reviewStatus?: string;
+  progress?: number;
 }
 
 interface DepartmentMentor {
@@ -240,24 +245,29 @@ export const Profile = () => {
     }
   }, [user]);
 
-  // Fetch Tasks for this user
+  // Real-time Tasks subscription strictly for this member's allotted tasks
   useEffect(() => {
-    if (!token) return;
+    if (!user) return;
     setLoadingTasks(true);
-    apiFetch('/api/tasks', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setMyTasks(data);
-        }
-      })
-      .catch(err => {
-        console.error('Failed to load user tasks:', err);
-      })
-      .finally(() => setLoadingTasks(false));
-  }, [token]);
+
+    const unsubscribe = subscribeToTasks(
+      (allTasks: FirestoreTask[]) => {
+        // Filter strictly for tasks allotted to this member
+        const userAllottedTasks = allTasks.filter(t => isTaskAssignedToMember(t, user));
+        setMyTasks(userAllottedTasks as unknown as TaskItem[]);
+        setLoadingTasks(false);
+      },
+      user.id,
+      user.role,
+      user.forenclueId,
+      user.email,
+      user.name
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user]);
 
   if (!user) return null;
 
@@ -267,9 +277,9 @@ export const Profile = () => {
   const mentorInfo = DEPARTMENT_MENTORS[userDept] || DEPARTMENT_MENTORS['Creative & Graphics'];
 
   const todoTasks = myTasks.filter(t => t.status === 'TODO');
-  const inProgressTasks = myTasks.filter(t => t.status === 'IN_PROGRESS');
-  const completedTasks = myTasks.filter(t => t.status === 'COMPLETED');
-  const completionRate = myTasks.length > 0 ? Math.round((completedTasks.length / myTasks.length) * 100) : 100;
+  const inProgressTasks = myTasks.filter(t => t.status === 'IN_PROGRESS' || (t.status as string) === 'UNDER_REVIEW' || (t.status as string) === 'UNDER REVIEW');
+  const completedTasks = myTasks.filter(t => t.status === 'COMPLETED' || t.status === 'SUBMITTED');
+  const completionRate = myTasks.length > 0 ? Math.round((completedTasks.length / myTasks.length) * 100) : 0;
 
   const handleCopyId = () => {
     navigator.clipboard.writeText(user.forenclueId);

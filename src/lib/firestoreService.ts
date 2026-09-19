@@ -74,6 +74,11 @@ export interface FirestoreTask {
     uploadedAt?: string;
   }>;
   submittedAt?: string | null;
+  reviewStatus?: 'PENDING_REVIEW' | 'CHANGES_REQUESTED' | 'APPROVED' | null;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewFeedback?: string | null;
   extensionRequest?: TaskExtensionRequest | null;
   createdAt: string;
   updatedAt: string;
@@ -817,16 +822,71 @@ export async function deleteFirestoreUser(userId: string): Promise<void> {
 // ----------------------------------------------------
 // TASKS & DELIVERABLES SERVICE
 // ----------------------------------------------------
-export async function fetchAllTasks(assignedUserId?: string, userRole?: string): Promise<FirestoreTask[]> {
+
+export function isTaskAssignedToMember(
+  task: Partial<FirestoreTask> | any,
+  user: { id?: string | number; forenclueId?: string; email?: string; name?: string; role?: string } | null | undefined
+): boolean {
+  if (!task || !user) return false;
+
+  const targetId = user.id !== undefined && user.id !== null ? String(user.id).trim().toLowerCase() : '';
+  const targetFcId = user.forenclueId ? String(user.forenclueId).trim().toLowerCase() : '';
+  const targetEmail = user.email ? String(user.email).trim().toLowerCase() : '';
+  const targetName = user.name ? String(user.name).trim().toLowerCase() : '';
+
+  const taskAssignedTo = task.assignedTo !== undefined && task.assignedTo !== null ? String(task.assignedTo).trim().toLowerCase() : '';
+  const taskFcId = task.assignedUserForenclueId ? String(task.assignedUserForenclueId).trim().toLowerCase() : '';
+  const taskEmail = task.assignedUserEmail ? String(task.assignedUserEmail).trim().toLowerCase() : '';
+  const taskUserName = task.assignedUserName ? String(task.assignedUserName).trim().toLowerCase() : '';
+
+  // 1. Match by assignedTo identifier or ForenClue ID
+  if (targetId && taskAssignedTo && (taskAssignedTo === targetId || taskAssignedTo === targetFcId)) {
+    return true;
+  }
+  if (targetFcId && taskAssignedTo && (taskAssignedTo === targetFcId || taskAssignedTo === targetId)) {
+    return true;
+  }
+
+  // 2. Match by ForenClue ID field on task
+  if (targetFcId && taskFcId && taskFcId === targetFcId) {
+    return true;
+  }
+
+  // 3. Match by email
+  if (targetEmail && taskEmail && taskEmail === targetEmail) {
+    return true;
+  }
+
+  // 4. Match by exact member name if length > 2
+  if (targetName && taskUserName && targetName.length > 2 && taskUserName === targetName) {
+    return true;
+  }
+
+  return false;
+}
+
+export async function fetchAllTasks(
+  assignedUserId?: string, 
+  userRole?: string,
+  userForenclueId?: string,
+  userEmail?: string,
+  userName?: string
+): Promise<FirestoreTask[]> {
   try {
     const tasksCol = collection(db, 'tasks');
     const snap = await getDocs(tasksCol);
     const all = snap.docs.map(d => ({ ...d.data(), id: d.id } as FirestoreTask));
 
-    if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || !assignedUserId) {
+    const isPrivileged = userRole === 'SUPER_ADMIN' || userRole === 'SUPER ADMIN' || userRole === 'ADMIN';
+    if (isPrivileged || (!assignedUserId && !userForenclueId && !userEmail && !userName)) {
       return all;
     }
-    return all.filter(t => t.assignedTo === assignedUserId || t.createdBy === assignedUserId);
+
+    const userObj = { id: assignedUserId, forenclueId: userForenclueId, email: userEmail, name: userName };
+    return all.filter(t => 
+      isTaskAssignedToMember(t, userObj) || 
+      (assignedUserId && (String(t.createdBy) === String(assignedUserId) || (userForenclueId && String(t.creatorForenclueId) === String(userForenclueId))))
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'tasks');
     return [];
@@ -836,14 +896,24 @@ export async function fetchAllTasks(assignedUserId?: string, userRole?: string):
 export function subscribeToTasks(
   callback: (tasks: FirestoreTask[]) => void,
   assignedUserId?: string,
-  userRole?: string
+  userRole?: string,
+  userForenclueId?: string,
+  userEmail?: string,
+  userName?: string
 ): Unsubscribe {
   const tasksCol = collection(db, 'tasks');
   return onSnapshot(tasksCol, (snap) => {
     let all = snap.docs.map(d => ({ ...d.data(), id: d.id } as FirestoreTask));
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && assignedUserId) {
-      all = all.filter(t => t.assignedTo === assignedUserId || t.createdBy === assignedUserId);
+    
+    const isPrivileged = userRole === 'SUPER_ADMIN' || userRole === 'SUPER ADMIN' || userRole === 'ADMIN';
+    if (!isPrivileged && (assignedUserId || userForenclueId || userEmail || userName)) {
+      const userObj = { id: assignedUserId, forenclueId: userForenclueId, email: userEmail, name: userName };
+      all = all.filter(t => 
+        isTaskAssignedToMember(t, userObj) || 
+        (assignedUserId && (String(t.createdBy) === String(assignedUserId) || (userForenclueId && String(t.creatorForenclueId) === String(userForenclueId))))
+      );
     }
+    
     callback(all);
   }, (error) => {
     handleFirestoreError(error, OperationType.LIST, 'tasks');
@@ -952,7 +1022,9 @@ export async function submitTaskDeliverable(
         : [];
 
     await updateDoc(taskDocRef, {
-      status: 'COMPLETED',
+      status: 'UNDER REVIEW',
+      reviewStatus: 'PENDING_REVIEW',
+      reviewFeedback: null,
       notes: notes,
       deliverableNotes: notes,
       deliverableLink: link || '',
@@ -965,15 +1037,74 @@ export async function submitTaskDeliverable(
       progress: 100
     });
     
-    // Notify the Admin/Creator
+    // Notify the Super Admin / Creator
+    const adminRecipients = new Set<string>();
     if (taskData.createdBy) {
+      adminRecipients.add(taskData.createdBy);
+    }
+    adminRecipients.add('user_admin_001');
+
+    for (const adminId of adminRecipients) {
       await createNotification({
-        userId: taskData.createdBy,
-        title: 'Task Completed',
-        message: `${taskData.assignedUserName || 'A member'} has submitted the deliverable for task: "${taskData.title}".`,
+        userId: adminId,
+        title: 'Deliverable Submitted for Review',
+        message: `${taskData.assignedUserName || 'A member'} submitted the deliverable for "${taskData.title}". Ready for Super Admin review.`,
         type: 'TASK',
         link: '/tasks'
       }).catch(console.error);
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
+    throw error;
+  }
+}
+
+export async function reviewTaskDeliverable(
+  taskId: string,
+  decision: 'PERFECT' | 'CHANGES_REQUESTED',
+  reviewer: { id: string; name: string },
+  feedback?: string
+): Promise<void> {
+  try {
+    const taskDocRef = doc(db, 'tasks', taskId);
+    const snap = await getDoc(taskDocRef);
+    if (!snap.exists()) {
+      throw new Error('Task not found');
+    }
+    const taskData = snap.data() as FirestoreTask;
+    const isPerfect = decision === 'PERFECT';
+    const cleanFeedback = (feedback || '').trim();
+
+    await updateDoc(taskDocRef, {
+      status: isPerfect ? 'COMPLETED' : 'IN_PROGRESS',
+      reviewStatus: isPerfect ? 'APPROVED' : 'CHANGES_REQUESTED',
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: reviewer.id,
+      reviewedByName: reviewer.name,
+      reviewFeedback: cleanFeedback || (isPerfect ? "Verified and approved as perfect!" : "Changes requested by Super Admin"),
+      progress: isPerfect ? 100 : 60,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Notify the assigned member
+    if (taskData.assignedTo) {
+      if (isPerfect) {
+        await createNotification({
+          userId: taskData.assignedTo,
+          title: "Deliverable Approved - It's Perfect!",
+          message: `Super Admin ${reviewer.name} reviewed your deliverable for "${taskData.title}" and approved it as perfect!${cleanFeedback ? ` Note: "${cleanFeedback}"` : ''}`,
+          type: 'TASK',
+          link: '/tasks'
+        }).catch(console.error);
+      } else {
+        await createNotification({
+          userId: taskData.assignedTo,
+          title: 'Changes Requested on Deliverable',
+          message: `Super Admin ${reviewer.name} reviewed your deliverable for "${taskData.title}" and requested changes: "${cleanFeedback || 'Please check the feedback and resubmit'}"`,
+          type: 'TASK',
+          link: '/tasks'
+        }).catch(console.error);
+      }
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);

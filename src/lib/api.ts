@@ -6,9 +6,11 @@ import {
   updateFirestoreUserPassword,
   deleteFirestoreUser, 
   fetchAllTasks, 
+  isTaskAssignedToMember,
   createFirestoreTask, 
   updateFirestoreTask, 
   submitTaskDeliverable, 
+  reviewTaskDeliverable,
   deleteFirestoreTask,
   fetchChatGroups,
   createFirestoreChatGroup,
@@ -192,6 +194,7 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
     }
 
     const userTasks = allTasks.filter((t: any) => 
+      isTaskAssignedToMember(t, storedUser || { id: userId }) ||
       (userId && String(t.assignedTo) === String(userId)) ||
       (storedUser?.id && String(t.assignedTo) === String(storedUser.id)) ||
       (storedUser?.forenclueId && t.assignedUserForenclueId === storedUser.forenclueId) ||

@@ -74,38 +74,45 @@ export const Calendar: React.FC = () => {
   // Fetch tasks with real-time Firestore listener
   useEffect(() => {
     setLoadingTasks(true);
-    const unsubscribe = subscribeToTasks((firestoreTasks) => {
-      const mapped: CalendarTaskItem[] = firestoreTasks.map((t) => {
-        const dueDateStr = t.dueDate || ((t as any).deadline ? new Date((t as any).deadline).toISOString().split('T')[0] : 'Standard');
-        let isOverdue = false;
-        if (t.status !== 'COMPLETED' && t.dueDate) {
-          const parsed = new Date(t.dueDate).getTime();
-          if (!isNaN(parsed) && parsed < Date.now()) {
-            isOverdue = true;
+    const unsubscribe = subscribeToTasks(
+      (firestoreTasks) => {
+        const mapped: CalendarTaskItem[] = firestoreTasks.map((t) => {
+          const dueDateStr = t.dueDate || ((t as any).deadline ? new Date((t as any).deadline).toISOString().split('T')[0] : 'Standard');
+          let isOverdue = false;
+          if (t.status !== 'COMPLETED' && t.dueDate) {
+            const parsed = new Date(t.dueDate).getTime();
+            if (!isNaN(parsed) && parsed < Date.now()) {
+              isOverdue = true;
+            }
           }
-        }
-        return {
-          id: t.id,
-          title: t.title,
-          description: t.description,
-          priority: (t.priority as any) || 'MEDIUM',
-          status: t.status === 'COMPLETED' ? 'COMPLETED' : t.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'TODO',
-          department: t.department || 'Digital Forensics',
-          dueDate: dueDateStr,
-          notes: t.notes || null,
-          assignedTo: t.assignedTo || null,
-          assignedUserName: t.assignedUserName,
-          assignedUserForenclueId: t.assignedUserForenclueId,
-          extensionRequest: t.extensionRequest,
-          isOverdue
-        };
-      });
-      setTasks(mapped);
-      setLoadingTasks(false);
-    });
+          return {
+            id: t.id,
+            title: t.title,
+            description: t.description,
+            priority: (t.priority as any) || 'MEDIUM',
+            status: t.status === 'COMPLETED' ? 'COMPLETED' : t.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'TODO',
+            department: t.department || 'Digital Forensics',
+            dueDate: dueDateStr,
+            notes: t.notes || null,
+            assignedTo: t.assignedTo || null,
+            assignedUserName: t.assignedUserName,
+            assignedUserForenclueId: t.assignedUserForenclueId,
+            extensionRequest: t.extensionRequest,
+            isOverdue
+          };
+        });
+        setTasks(mapped);
+        setLoadingTasks(false);
+      },
+      user?.id,
+      user?.role,
+      user?.forenclueId,
+      user?.email,
+      user?.name
+    );
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const handleCreateEvent = (e: React.FormEvent) => {
     e.preventDefault();
