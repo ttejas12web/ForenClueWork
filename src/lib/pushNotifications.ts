@@ -50,11 +50,28 @@ export function urlBase64ToUint8Array(base64String?: string): Uint8Array {
 
 export function isPushNotificationSupported(): boolean {
   if (typeof window === 'undefined') return false;
-  return (
-    'serviceWorker' in navigator &&
-    'PushManager' in window &&
-    'Notification' in window
-  );
+  try {
+    return (
+      'serviceWorker' in navigator &&
+      'PushManager' in window &&
+      'Notification' in window &&
+      typeof Notification !== 'undefined'
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function getSafeNotificationPermission(): NotificationPermission | 'unsupported' {
+  if (typeof window === 'undefined') return 'unsupported';
+  try {
+    if (!('Notification' in window) || typeof Notification === 'undefined') {
+      return 'unsupported';
+    }
+    return Notification.permission || 'default';
+  } catch {
+    return 'unsupported';
+  }
 }
 
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
@@ -291,7 +308,7 @@ export async function showDeviceNotification(
   }
 ): Promise<boolean> {
   if (typeof window === 'undefined') return false;
-  if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+  if (getSafeNotificationPermission() !== 'granted') return false;
 
   const notifOptions: NotificationOptions = {
     body: options?.body || '',

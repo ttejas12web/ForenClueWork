@@ -242,11 +242,13 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
                         }`}
                       >
                         <div className={`h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                          notif.type === 'TASK_ASSIGNED'
+                          notif.type === 'TASK'
                             ? 'bg-blue-100 text-blue-700'
-                            : notif.type === 'TASK_UPDATE'
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-slate-100 text-slate-700'
+                            : notif.type === 'CHAT'
+                              ? 'bg-indigo-100 text-indigo-700'
+                              : notif.type === 'ANNOUNCEMENT'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-slate-100 text-slate-700'
                         }`}>
                           <CheckSquare className="h-4 w-4" />
                         </div>

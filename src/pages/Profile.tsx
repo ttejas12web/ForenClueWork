@@ -42,6 +42,7 @@ import {
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   isPushNotificationSupported, 
+  getSafeNotificationPermission,
   subscribeToPushNotifications, 
   sendTestPushNotification, 
   getExistingPushSubscription 
@@ -82,6 +83,12 @@ const DEPARTMENT_MENTORS: Record<string, DepartmentMentor> = {
     code: 'CS',
     color: 'bg-emerald-600'
   },
+  'Case Studies': {
+    name: 'Ayush Gaikwad',
+    forenclueId: 'FC-EMP-2026-003',
+    code: 'CS',
+    color: 'bg-emerald-600'
+  },
   'Research': {
     name: 'Mrunmayee Bodhe',
     forenclueId: 'FC-EMP-2026-002',
@@ -93,6 +100,18 @@ const DEPARTMENT_MENTORS: Record<string, DepartmentMentor> = {
     forenclueId: 'FC-EMP-2026-002',
     code: 'EM',
     color: 'bg-purple-600'
+  },
+  'Event Management': {
+    name: 'Mrunmayee Bodhe',
+    forenclueId: 'FC-EMP-2026-002',
+    code: 'EM',
+    color: 'bg-purple-600'
+  },
+  'Social Media Management': {
+    name: 'Tejas Tapse',
+    forenclueId: 'FC-EMP-2026-001',
+    code: 'SM',
+    color: 'bg-pink-600'
   },
   'Cyber & Digital Forensics': {
     name: 'Tejas Tapse',
@@ -156,8 +175,9 @@ export const Profile = () => {
         setNotificationPermission('unsupported');
         return;
       }
-      setNotificationPermission(Notification.permission);
-      if (Notification.permission === 'granted') {
+      const perm = getSafeNotificationPermission();
+      setNotificationPermission(perm);
+      if (perm === 'granted') {
         const sub = await getExistingPushSubscription();
         if (sub) {
           setPushRegistered(true);
@@ -186,7 +206,8 @@ export const Profile = () => {
           text: 'Background push notifications are active! You will receive alerts on your Home Screen even when closed.'
         });
       } else {
-        if (Notification.permission === 'denied') {
+        const perm = getSafeNotificationPermission();
+        if (perm === 'denied') {
           setNotificationPermission('denied');
         }
         setPushMessage({

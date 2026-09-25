@@ -89,6 +89,7 @@ interface ChatGroup {
   createdAt: string;
   memberCount: number;
   members: ChatMember[];
+  isE2EE?: boolean;
   lastMessage: {
     id: any;
     content: string;
@@ -107,6 +108,7 @@ interface ChatMessage {
   content: string;
   attachmentUrl?: string | null;
   attachmentName?: string | null;
+  attachmentType?: string | null;
   isEncrypted?: boolean;
   createdAt: string;
   senderName: string;

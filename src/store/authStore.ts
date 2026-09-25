@@ -48,6 +48,7 @@ function sanitizeAuthUser(u: User | null): User | null {
 export const useAuthStore = create<AuthState>((set) => ({
   user: (() => {
     try {
+      if (typeof window === 'undefined' || !window.localStorage) return null;
       const storedUser = localStorage.getItem('auth_user');
       if (!storedUser) return null;
       const parsed = JSON.parse(storedUser);
@@ -56,39 +57,68 @@ export const useAuthStore = create<AuthState>((set) => ({
       return null;
     }
   })(),
-  token: localStorage.getItem('auth_token'),
+  token: (() => {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) return null;
+      return localStorage.getItem('auth_token');
+    } catch {
+      return null;
+    }
+  })(),
   loading: true,
   
   setUser: (rawUser) => {
     const user = sanitizeAuthUser(rawUser);
-    if (user) {
-      localStorage.setItem('auth_user', JSON.stringify(user));
-      localStorage.setItem('auth_user_id', user.id);
-    } else {
-      localStorage.removeItem('auth_user');
-      localStorage.removeItem('auth_user_id');
-    }
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        if (user) {
+          localStorage.setItem('auth_user', JSON.stringify(user));
+          localStorage.setItem('auth_user_id', user.id);
+        } else {
+          localStorage.removeItem('auth_user');
+          localStorage.removeItem('auth_user_id');
+        }
+      }
+    } catch {}
     set({ user });
   },
 
   login: (token, rawUser) => {
     const user = sanitizeAuthUser(rawUser) || rawUser;
-    localStorage.setItem('auth_token', token);
-    localStorage.setItem('auth_user', JSON.stringify(user));
-    localStorage.setItem('auth_user_id', user.id);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('auth_token', token);
+        localStorage.setItem('auth_user', JSON.stringify(user));
+        localStorage.setItem('auth_user_id', user.id);
+      }
+    } catch {}
     set({ user, token, loading: false });
   },
 
   logout: () => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
-    localStorage.removeItem('auth_user_id');
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('auth_user_id');
+      }
+    } catch {}
     set({ user: null, token: null, loading: false });
   },
 
   initialize: async () => {
-    const token = localStorage.getItem('auth_token');
-    const storedUserStr = localStorage.getItem('auth_user');
+    let token: string | null = null;
+    let storedUserStr: string | null = null;
+    
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        token = localStorage.getItem('auth_token');
+        storedUserStr = localStorage.getItem('auth_user');
+      }
+    } catch {
+      token = null;
+      storedUserStr = null;
+    }
     
     if (!token || !storedUserStr) {
       set({ user: null, token: null, loading: false });
@@ -98,20 +128,31 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const cachedUser = sanitizeAuthUser(JSON.parse(storedUserStr));
       if (cachedUser) {
-        localStorage.setItem('auth_user', JSON.stringify(cachedUser));
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.setItem('auth_user', JSON.stringify(cachedUser));
+          }
+        } catch {}
       }
       set({ user: cachedUser, token, loading: false });
 
-      // Refresh latest user record from Firestore in background
+      // Refresh latest user record from Firestore in background (non-blocking)
       if (cachedUser?.id) {
-        const userDoc = await getDoc(doc(db, 'users', cachedUser.id));
-        if (userDoc.exists()) {
-          const freshData = sanitizeAuthUser({ ...userDoc.data(), id: userDoc.id } as User);
-          if (freshData) {
-            localStorage.setItem('auth_user', JSON.stringify(freshData));
-            set({ user: freshData });
+        getDoc(doc(db, 'users', cachedUser.id)).then(userDoc => {
+          if (userDoc.exists()) {
+            const freshData = sanitizeAuthUser({ ...userDoc.data(), id: userDoc.id } as User);
+            if (freshData) {
+              try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                  localStorage.setItem('auth_user', JSON.stringify(freshData));
+                }
+              } catch {}
+              set({ user: freshData });
+            }
           }
-        }
+        }).catch(err => {
+          console.warn('Background user refresh skipped:', err);
+        });
       }
     } catch (error) {
       console.warn('Auth state refresh:', error);

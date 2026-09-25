@@ -203,8 +203,11 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
     
     const DEPARTMENTS = [
       'Creative & Graphics',
+      'Case Studies',
       'Case Study',
       'Research',
+      'Social Media Management',
+      'Event Management',
       'Events & Management',
       'Cyber & Digital Forensics',
       'Campus Ambassadors'
@@ -213,8 +216,11 @@ async function handleFirestoreFallback(endpoint: string, method: string, options
     const DEPARTMENT_THEMES: Record<string, { bg: string; badge: string; bar: string }> = {
       'Creative & Graphics': { bg: 'bg-rose-50', badge: 'bg-rose-50 text-rose-700 border-rose-200', bar: 'bg-rose-600' },
       'Creative & Design': { bg: 'bg-rose-50', badge: 'bg-rose-50 text-rose-700 border-rose-200', bar: 'bg-rose-600' },
+      'Case Studies': { bg: 'bg-emerald-50', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: 'bg-emerald-600' },
       'Case Study': { bg: 'bg-emerald-50', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: 'bg-emerald-600' },
       'Research': { bg: 'bg-blue-50', badge: 'bg-blue-50 text-blue-700 border-blue-200', bar: 'bg-blue-600' },
+      'Social Media Management': { bg: 'bg-pink-50', badge: 'bg-pink-50 text-pink-700 border-pink-200', bar: 'bg-pink-600' },
+      'Event Management': { bg: 'bg-purple-50', badge: 'bg-purple-50 text-purple-700 border-purple-200', bar: 'bg-purple-600' },
       'Events & Management': { bg: 'bg-purple-50', badge: 'bg-purple-50 text-purple-700 border-purple-200', bar: 'bg-purple-600' },
       'Cyber & Digital Forensics': { bg: 'bg-indigo-50', badge: 'bg-indigo-50 text-indigo-700 border-indigo-200', bar: 'bg-indigo-600' },
       'Campus Ambassadors': { bg: 'bg-amber-50', badge: 'bg-amber-50 text-amber-900 border-amber-300', bar: 'bg-amber-600' }

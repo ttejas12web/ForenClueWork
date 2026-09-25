@@ -54,8 +54,11 @@ export const AdminConsole = () => {
 
   const departmentsList = [
     'Creative & Graphics',
+    'Case Studies',
     'Case Study',
     'Research',
+    'Social Media Management',
+    'Event Management',
     'Events & Management',
     'Cyber & Digital Forensics',
     'Campus Ambassadors'

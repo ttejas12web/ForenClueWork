@@ -122,8 +122,11 @@ interface WorkspaceMember {
 }
 
 export const DEPARTMENTS = [
+  'Case Studies',
   'Case Study',
   'Research',
+  'Social Media Management',
+  'Event Management',
   'Events & Management',
   'Cyber & Digital Forensics',
   'Creative & Graphics',
@@ -1296,7 +1299,7 @@ export const Tasks: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-w-0 w-full">
           {filteredTasks.map((task) => {
-            const isUnderReview = task.status === 'UNDER REVIEW' || task.status === 'UNDER_REVIEW' || task.reviewStatus === 'PENDING_REVIEW';
+            const isUnderReview = (task.status as string) === 'UNDER REVIEW' || (task.status as string) === 'UNDER_REVIEW' || task.reviewStatus === 'PENDING_REVIEW';
             const isChangesRequested = task.reviewStatus === 'CHANGES_REQUESTED';
             const isApprovedPerfect = task.reviewStatus === 'APPROVED';
             const isCompleted = (task.status === 'COMPLETED' || task.status === 'SUBMITTED') && !isUnderReview;

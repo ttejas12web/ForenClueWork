@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
-import { registerServiceWorker, subscribeToPushNotifications, isPushNotificationSupported } from './lib/pushNotifications';
+import { registerServiceWorker, subscribeToPushNotifications, isPushNotificationSupported, getSafeNotificationPermission } from './lib/pushNotifications';
 import { Login } from './pages/Login';
 import { ForcePasswordChange } from './pages/ForcePasswordChange';
 import { Dashboard } from './pages/Dashboard';
@@ -35,19 +35,32 @@ export default function App() {
   const { user, initialize, loading } = useAuthStore();
 
   useEffect(() => {
-    initialize();
-    registerServiceWorker();
+    initialize().catch(() => {});
+    registerServiceWorker().catch(() => {});
+
+    // Ensure loading never hangs in preview if network or auth is slow
+    const safetyTimer = setTimeout(() => {
+      if (useAuthStore.getState().loading) {
+        useAuthStore.setState({ loading: false });
+      }
+    }, 1500);
+
+    return () => clearTimeout(safetyTimer);
   }, [initialize]);
 
   // If user is authenticated and notification permission is granted, sync push subscription
   useEffect(() => {
-    if (user && isPushNotificationSupported() && Notification.permission === 'granted') {
-      subscribeToPushNotifications({
-        id: user.id,
-        forenclueId: user.forenclueId,
-        role: user.role,
-        department: user.department
-      }).catch(console.warn);
+    try {
+      if (user && isPushNotificationSupported() && getSafeNotificationPermission() === 'granted') {
+        subscribeToPushNotifications({
+          id: user.id,
+          forenclueId: user.forenclueId,
+          role: user.role,
+          department: user.department
+        }).catch(console.warn);
+      }
+    } catch (e) {
+      console.warn('Push sync notice:', e);
     }
   }, [user]);
 

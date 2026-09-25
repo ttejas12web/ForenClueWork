@@ -71,6 +71,16 @@ export const Teams = () => {
       badgeColor: 'bg-rose-50 text-rose-700 border-rose-200'
     },
     { 
+      name: 'Social Media Management', 
+      desc: 'Digital outreach, community engagement, brand campaigns, content scheduling, and awareness drives.', 
+      code: 'SM', 
+      mentorName: 'Tejas Tapse',
+      mentorId: 'FC-EMP-2026-001',
+      mentorEmail: 'ttapse12@gmail.com',
+      color: 'bg-pink-600',
+      badgeColor: 'bg-pink-50 text-pink-700 border-pink-200'
+    },
+    { 
       name: 'Case Study', 
       desc: 'Forensic case study investigations, incident post-mortems, forensic timelines, and historical case archives.', 
       code: 'CS', 
@@ -206,9 +216,14 @@ export const Teams = () => {
       const memId = String(m.forenclueId || m.id || m.email);
       if (seen.has(memId)) return false;
 
-      // 1. Department match (case-insensitive & trimmed)
+      // 1. Department match (case-insensitive & trimmed with aliases)
       const userDeptClean = (m.department || '').trim().toLowerCase();
-      const matchesDeptName = userDeptClean === deptName.trim().toLowerCase() ||
+      const targetDeptClean = deptName.trim().toLowerCase();
+      const matchesDeptName = userDeptClean === targetDeptClean ||
+        (targetDeptClean.startsWith('case stud') && userDeptClean.startsWith('case stud')) ||
+        (targetDeptClean.includes('event') && userDeptClean.includes('event')) ||
+        (targetDeptClean.includes('social media') && userDeptClean.includes('social media')) ||
+        (targetDeptClean.includes('creative') && userDeptClean.includes('creative')) ||
         (isCampusAmbassadors && (userDeptClean.includes('campus ambassador') || userDeptClean.includes('ambassador')));
 
       // 2. Role match for Campus Ambassador
