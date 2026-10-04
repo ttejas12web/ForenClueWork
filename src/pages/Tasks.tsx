@@ -35,7 +35,10 @@ import {
   CalendarClock,
   CalendarDays,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  Printer,
+  Building2,
+  LayoutGrid
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import {
@@ -66,6 +69,7 @@ import {
 import { TaskExtensionModal } from '../components/TaskExtensionModal';
 import { AdminExtensionReviewModal } from '../components/AdminExtensionReviewModal';
 import { AdminDeliverableReviewModal } from '../components/AdminDeliverableReviewModal';
+import { CANONICAL_DEPARTMENTS, normalizeDepartmentName, getDepartmentMetadata } from '../components/tasks/departmentData';
 
 export interface WorkspaceTask {
   id: any;
@@ -111,7 +115,7 @@ export interface WorkspaceTask {
   creatorForenclueId?: string;
 }
 
-interface WorkspaceMember {
+export interface WorkspaceMember {
   id: any;
   forenclueId: string;
   name: string;
@@ -224,6 +228,9 @@ export const Tasks: React.FC = () => {
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Department filter for horizontal options below status filter
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('ALL');
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'TODO' | 'IN_PROGRESS' | 'UNDER_REVIEW' | 'COMPLETED'>('ALL');
@@ -451,6 +458,12 @@ export const Tasks: React.FC = () => {
     setTaskReferenceFile(null);
     setTaskReferenceFileInfo(null);
     setShowAllotModal(true);
+  };
+
+  // Helper to allot task directly to a specific team member
+  const handleAllotToSpecificMember = (targetMember: WorkspaceMember) => {
+    handleOpenCreateModal(targetMember.department || 'Case Study');
+    setTaskAssignedTo(String(targetMember.id));
   };
 
   // Open Edit Task Modal
@@ -890,11 +903,30 @@ export const Tasks: React.FC = () => {
     }
   };
 
-  // Client-side search filtering
+  // Horizontal department list with live allotted task counts
+  const departmentOptions = useMemo(() => {
+    return CANONICAL_DEPARTMENTS.map(dept => {
+      const count = tasks.filter(t => normalizeDepartmentName(t.department) === dept.name).length;
+      return {
+        ...dept,
+        count
+      };
+    });
+  }, [tasks]);
+
+  // Client-side search and department filtering
   const filteredTasks = tasks.filter(t => {
     // If extension filter is active
     if (showExtensionsOnly && t.extensionRequest?.status !== 'PENDING') {
       return false;
+    }
+
+    // Filter by selected department if not ALL
+    if (selectedDepartment !== 'ALL') {
+      const taskDeptNorm = normalizeDepartmentName(t.department);
+      if (taskDeptNorm !== selectedDepartment) {
+        return false;
+      }
     }
 
     const query = searchQuery.toLowerCase();
@@ -961,7 +993,7 @@ export const Tasks: React.FC = () => {
 
       {/* Main Header Banner */}
       <div className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-200 shadow-2xs overflow-hidden w-full min-w-0">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 min-w-0 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 min-w-0 w-full">
           <div className="space-y-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
@@ -989,24 +1021,14 @@ export const Tasks: React.FC = () => {
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             {isSuperAdmin && (
-              <>
-                <div
-                  className="flex items-center space-x-1.5 px-3 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold min-h-[44px]"
-                  title="Storage credentials are managed securely by the server"
-                >
-                  <Shield className="h-3.5 w-3.5 text-emerald-600" />
-                  <span className="hidden sm:inline">Secure Backend Storage</span>
-                </div>
-
-                <button
-                  id="btn-allot-new-task"
-                  onClick={() => handleOpenCreateModal()}
-                  className="flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer min-h-[44px]"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Allot Task to Member</span>
-                </button>
-              </>
+              <button
+                id="btn-allot-new-task"
+                onClick={() => handleOpenCreateModal(selectedDepartment !== 'ALL' ? selectedDepartment : undefined)}
+                className="flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer min-h-[44px]"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Allot Task to Member</span>
+              </button>
             )}
           </div>
         </div>
@@ -1267,7 +1289,101 @@ export const Tasks: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Row 2: Horizontal Options of All Departments */}
+        <div className="pt-3 border-t border-slate-100 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none min-w-0 w-full">
+          <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-700 shrink-0 pr-1">
+            <Building2 className="h-4 w-4 text-blue-600" />
+            <span className="hidden sm:inline">Departments:</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSelectedDepartment('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center space-x-1.5 cursor-pointer shrink-0 ${
+              selectedDepartment === 'ALL'
+                ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/20'
+                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200/60'
+            }`}
+          >
+            <span>All Departments</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+              selectedDepartment === 'ALL' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {tasks.length}
+            </span>
+          </button>
+
+          {departmentOptions.map((dept) => {
+            const isSelected = selectedDepartment === dept.name;
+            return (
+              <button
+                key={dept.id}
+                type="button"
+                onClick={() => setSelectedDepartment(dept.name)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center space-x-1.5 cursor-pointer shrink-0 border ${
+                  isSelected
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/20'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/90'
+                }`}
+              >
+                <span className={`h-2 w-2 rounded-full ${isSelected ? 'bg-white' : dept.accentBg}`} />
+                <span>{dept.name}</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                  isSelected ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {dept.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Department Summary & Quick Allot Shortcut when specific department is active */}
+      {selectedDepartment !== 'ALL' && (
+        <div className="bg-gradient-to-r from-blue-50/80 via-slate-50/60 to-indigo-50/50 border border-blue-200/80 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center space-x-3">
+            <div className="h-9 w-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+              {getDepartmentMetadata(selectedDepartment).code}
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold text-slate-900">
+                  {selectedDepartment}
+                </span>
+                <span className="text-[11px] text-blue-700 font-semibold bg-blue-100/70 px-2 py-0.5 rounded-md">
+                  {filteredTasks.length} Task{filteredTasks.length !== 1 ? 's' : ''} Allotted
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5 flex items-center space-x-1.5">
+                <Crown className="h-3 w-3 text-amber-500 shrink-0" />
+                <span>Lead Mentor: <strong>{getDepartmentMetadata(selectedDepartment).mentorName}</strong> ({getDepartmentMetadata(selectedDepartment).mentorId})</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSelectedDepartment('ALL')}
+              className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-all cursor-pointer"
+            >
+              Show All Departments
+            </button>
+            {isSuperAdmin && (
+              <button
+                type="button"
+                onClick={() => handleOpenCreateModal(selectedDepartment)}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center space-x-1 shadow-xs cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Allot Task to {getDepartmentMetadata(selectedDepartment).code}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Task Grid */}
       {loading ? (
@@ -1280,19 +1396,23 @@ export const Tasks: React.FC = () => {
           <div className="h-12 w-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-3">
             <CheckSquare className="h-6 w-6" />
           </div>
-          <h3 className="text-sm font-bold text-slate-800">No Tasks Found</h3>
+          <h3 className="text-sm font-bold text-slate-800">
+            {selectedDepartment !== 'ALL' ? `No Tasks Found in ${selectedDepartment}` : 'No Tasks Found'}
+          </h3>
           <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
-            {isSuperAdmin
+            {selectedDepartment !== 'ALL'
+              ? `There are no deliverables currently allotted under ${selectedDepartment} matching the selected filters. Super Admins can allot tasks to members in this department below.`
+              : isSuperAdmin
               ? 'No tasks match the selected filters. Click "Allot Task to Member" above to create and assign tasks.'
               : 'You do not have any active tasks allotted to you right now. When Super Admin assigns a deliverable, you will receive an instant notification in your panel.'}
           </p>
           {isSuperAdmin && (
             <button
-              onClick={() => handleOpenCreateModal()}
+              onClick={() => handleOpenCreateModal(selectedDepartment !== 'ALL' ? selectedDepartment : undefined)}
               className="mt-4 inline-flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer"
             >
               <Plus className="h-4 w-4" />
-              <span>Allot First Task</span>
+              <span>{selectedDepartment !== 'ALL' ? `Allot Task to ${selectedDepartment}` : 'Allot First Task'}</span>
             </button>
           )}
         </div>
@@ -1341,19 +1461,27 @@ export const Tasks: React.FC = () => {
                 )}
 
                 <div>
-                  {/* Top Bar of Card: Priority & Status */}
+                  {/* Top Bar of Card: Priority, Department & Status */}
                   <div className="flex items-start justify-between gap-2 mb-3">
-                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                      task.priority === 'URGENT'
-                        ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                        : task.priority === 'HIGH'
-                          ? 'bg-orange-100 text-orange-700'
-                          : task.priority === 'MEDIUM'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-slate-100 text-slate-700'
-                    }`}>
-                      {task.priority} PRIORITY
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                        task.priority === 'URGENT'
+                          ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                          : task.priority === 'HIGH'
+                            ? 'bg-orange-100 text-orange-700'
+                            : task.priority === 'MEDIUM'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {task.priority} PRIORITY
+                      </span>
+                      {task.department && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/80 flex items-center space-x-1">
+                          <Building2 className="h-3 w-3 text-slate-500" />
+                          <span>{normalizeDepartmentName(task.department)}</span>
+                        </span>
+                      )}
+                    </div>
 
                     <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full transition-colors flex items-center space-x-1 ${
                       isChangesRequested

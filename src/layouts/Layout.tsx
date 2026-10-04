@@ -91,21 +91,27 @@ export const Layout = () => {
   return (
     <div className="flex h-[100dvh] w-full max-w-full overflow-hidden bg-slate-100/90 text-slate-900 antialiased font-sans">
       {/* Desktop Sidebar */}
-      <Sidebar 
-        mobileMenuOpen={mobileMenuOpen} 
-        setMobileMenuOpen={setMobileMenuOpen} 
-      />
+      <div className="no-print">
+        <Sidebar 
+          mobileMenuOpen={mobileMenuOpen} 
+          setMobileMenuOpen={setMobileMenuOpen} 
+        />
+      </div>
 
       {/* Main Content Area */}
       <div className="flex flex-col flex-1 min-w-0 w-full max-w-full overflow-hidden">
         {/* Offline Connectivity Warning Banner */}
-        <OfflineNetworkBanner />
+        <div className="no-print">
+          <OfflineNetworkBanner />
+        </div>
 
         {/* Top App Bar */}
-        <TopBar 
-          mobileMenuOpen={mobileMenuOpen} 
-          setMobileMenuOpen={setMobileMenuOpen} 
-        />
+        <div className="no-print">
+          <TopBar 
+            mobileMenuOpen={mobileMenuOpen} 
+            setMobileMenuOpen={setMobileMenuOpen} 
+          />
+        </div>
 
         {/* Page Viewport */}
         <main className={cn(
@@ -123,7 +129,7 @@ export const Layout = () => {
         </main>
 
         {/* Mobile Bottom Quick Navigation Bar (Visible on mobile screens < 768px) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200/90 px-3 pb-[env(safe-area-inset-bottom)] flex items-center justify-around z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+        <nav className="no-print md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200/90 px-3 pb-[env(safe-area-inset-bottom)] flex items-center justify-around z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
           <div className="flex items-center justify-around w-full h-16 max-w-lg mx-auto">
             {mobileNavItems.map((item) => {
               const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));

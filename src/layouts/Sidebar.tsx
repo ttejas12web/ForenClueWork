@@ -31,7 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileMenuOpen, setMobileMenuO
   const mainNavItems = [
     { name: 'Dashboard', path: '/', icon: Home, roles: ['SUPER_ADMIN', 'MENTOR', 'EMPLOYEE', 'VOLUNTEER', 'CAMPUS_AMBASSADOR'] },
     { name: 'Workspace Chat', path: '/chat', icon: MessageSquare, roles: ['SUPER_ADMIN', 'MENTOR', 'EMPLOYEE', 'VOLUNTEER', 'CAMPUS_AMBASSADOR'] },
-    { name: 'Tasks & Sprints', path: '/tasks', icon: CheckSquare, roles: ['SUPER_ADMIN', 'MENTOR', 'EMPLOYEE', 'VOLUNTEER', 'CAMPUS_AMBASSADOR'] },
+    { name: 'Tasks & Prints', path: '/tasks', icon: CheckSquare, roles: ['SUPER_ADMIN', 'MENTOR', 'EMPLOYEE', 'VOLUNTEER', 'CAMPUS_AMBASSADOR'] },
     { name: 'Projects', path: '/projects', icon: Briefcase, roles: ['SUPER_ADMIN', 'MENTOR', 'EMPLOYEE', 'VOLUNTEER', 'CAMPUS_AMBASSADOR'] },
     { name: 'Departments & Teams', path: '/teams', icon: Users, roles: ['SUPER_ADMIN', 'MENTOR', 'EMPLOYEE', 'VOLUNTEER', 'CAMPUS_AMBASSADOR'] },
   ];

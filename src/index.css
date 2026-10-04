@@ -48,3 +48,54 @@ html, body, #root {
   max-width: 100%;
   width: 100%;
 }
+
+/* Professional Print Styles for Task & Department Dossiers */
+@media print {
+  /* Hide navigation, sidebar, topbar, mobile nav, and non-printable elements */
+  aside,
+  nav,
+  header,
+  .no-print,
+  [data-no-print="true"],
+  button:not(.print-keep),
+  #pwa-install-banner,
+  .pwa-prompt {
+    display: none !important;
+  }
+
+  /* Reset body and root backgrounds for clean physical/PDF printing */
+  html,
+  body,
+  #root,
+  main {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-shadow: none !important;
+  }
+
+  /* Ensure colors and backgrounds render in browser print dialog */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-page-break-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-page-break-after {
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 12mm 10mm 15mm 10mm;
+  }
+}

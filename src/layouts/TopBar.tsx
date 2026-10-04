@@ -103,7 +103,7 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
     const path = location.pathname;
     if (path === '/') return 'Dashboard Overview';
     if (path.startsWith('/chat')) return 'Workspace Chat';
-    if (path.startsWith('/tasks')) return 'Task Management';
+    if (path.startsWith('/tasks')) return 'Tasks & Prints';
     if (path.startsWith('/projects')) return 'Projects';
     if (path.startsWith('/teams')) return 'Departments & Teams';
     if (path.startsWith('/resources')) return 'Resource Library';
