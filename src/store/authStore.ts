@@ -17,6 +17,15 @@ function sanitizeAuthUser(u: User | null): User | null {
   if (!u) return null;
   const name = (u.name || '').toLowerCase();
   const email = (u.email || '').toLowerCase();
+  if (name.includes('pranav') || u.forenclueId === 'FC-EMP-26-004' || u.id === 'user_emp_26_004') {
+    return {
+      ...u,
+      name: 'Pranav Kale',
+      forenclueId: 'FC-EMP-26-004',
+      role: 'SUPER_ADMIN',
+      designation: u.designation || 'Super Administrator'
+    };
+  }
   if (
     u.id === 'user_emp_004' ||
     u.forenclueId === 'FC-EMP-2026-004' ||

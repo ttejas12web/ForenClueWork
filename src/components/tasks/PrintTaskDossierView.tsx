@@ -505,7 +505,7 @@ export const PrintTaskDossierView: React.FC<PrintTaskDossierViewProps> = ({
             <div className="p-4 rounded-xl border border-slate-300 bg-slate-50/50 flex flex-col justify-between h-36">
               <div>
                 <p className="text-[10px] font-bold text-slate-500 uppercase">Department Lead Mentor</p>
-                <p className="text-xs font-bold text-slate-800 mt-0.5">Ayush Gaikwad / Mrunmayee Bodhe / Tejas Tapse</p>
+                <p className="text-xs font-bold text-slate-800 mt-0.5">Ayush Gaikwad / Mrunmayee Bodhe / Pranav Kale / Tejas Tapse</p>
                 <p className="text-[10px] text-slate-400">Designated Forensic Lead</p>
               </div>
               <div className="border-t border-slate-300 pt-1 text-center">

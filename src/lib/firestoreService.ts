@@ -257,6 +257,23 @@ export const SEED_USERS: FirestoreUser[] = [
     updatedAt: new Date().toISOString(),
   },
   {
+    id: 'user_emp_26_004',
+    forenclueId: 'FC-EMP-26-004',
+    name: 'Pranav Kale',
+    email: 'pranav.kale@forenclue.in',
+    password: 'Forenclue@2026',
+    role: 'SUPER_ADMIN',
+    department: 'Cyber & Digital Forensics',
+    designation: 'Super Administrator',
+    phone: '+91 98765 43214',
+    bio: 'Executive Super Admin at ForenClue Workspace.',
+    isDefaultPassword: true,
+    tempPasswordChanged: false,
+    active: true,
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: new Date().toISOString(),
+  },
+  {
     id: 'user_men_26_001',
     forenclueId: 'FC-MEN-26-001',
     name: 'Rajat Pithadia',
@@ -592,9 +609,11 @@ export const SEED_USERS: FirestoreUser[] = [
 
 export function isPurvaUser(u: { id?: string; forenclueId?: string; name?: string; email?: string } | null | undefined): boolean {
   if (!u) return false;
-  if (u.id === 'user_emp_004' || u.forenclueId === 'FC-EMP-2026-004') return true;
   const name = (u.name || '').toLowerCase();
   const email = (u.email || '').toLowerCase();
+  if (name.includes('pranav') || u.id === 'user_emp_26_004' || u.forenclueId === 'FC-EMP-26-004') return false;
+  if (name.includes('rajat') || u.id === 'user_men_26_001' || u.forenclueId === 'FC-MEN-26-001') return false;
+  if (u.id === 'user_emp_004' || u.forenclueId === 'FC-EMP-2026-004') return true;
   if (name.includes('purva') || name.includes('bhawsar') || name.includes('hawser')) return true;
   if (email.includes('purva') || email.includes('bhawsar') || email.includes('hawser')) return true;
   return false;
@@ -651,7 +670,7 @@ export async function ensureDefaultFirestoreSeed(): Promise<void> {
         }
       }
       
-      // Cleanup any user doc matching Purva
+      // Cleanup any user doc matching Purva or duplicate Rajat Pithadia docs
       const usersCol = collection(db, 'users');
       const allUsersSnap = await getDocs(usersCol);
       for (const userDoc of allUsersSnap.docs) {
@@ -665,6 +684,16 @@ export async function ensureDefaultFirestoreSeed(): Promise<void> {
         ) {
           purvaDocIds.add(userDoc.id);
           if (uData.forenclueId) purvaDocIds.add(uData.forenclueId);
+          await deleteDoc(doc(db, 'users', userDoc.id));
+          continue;
+        }
+
+        // Remove any duplicate Rajat Pithadia accounts so there is only one
+        const nameLower = (uData.name || '').toLowerCase();
+        const emailLower = (uData.email || '').toLowerCase();
+        const fcIdUpper = (uData.forenclueId || '').toUpperCase();
+        const isRajatAccount = nameLower.includes('rajat') || emailLower.includes('rajat') || fcIdUpper.includes('FC-MEN');
+        if (isRajatAccount && userDoc.id !== 'user_men_26_001') {
           await deleteDoc(doc(db, 'users', userDoc.id));
         }
       }
@@ -773,6 +802,20 @@ export async function ensureDefaultFirestoreSeed(): Promise<void> {
                 department: 'Mentors',
                 role: 'MENTOR',
                 designation: 'Senior Forensic Mentor & Advisory Lead',
+                active: true
+              });
+            }
+          }
+
+          // Enforce Super Admin role & FC-EMP-26-004 for Pranav Kale
+          if (u.id === 'user_emp_26_004' || u.forenclueId === 'FC-EMP-26-004') {
+            if (existingData.role !== 'SUPER_ADMIN' || existingData.forenclueId !== 'FC-EMP-26-004' || existingData.name !== 'Pranav Kale') {
+              await updateDoc(userDocRef, {
+                name: 'Pranav Kale',
+                forenclueId: 'FC-EMP-26-004',
+                email: 'pranav.kale@forenclue.in',
+                role: 'SUPER_ADMIN',
+                designation: 'Super Administrator',
                 active: true
               });
             }
@@ -1070,7 +1113,73 @@ function normalizeUserRecord(user: FirestoreUser): FirestoreUser {
       role: 'SUPER_ADMIN'
     };
   }
+  if (
+    normalized.id === 'user_men_26_001' ||
+    normalized.forenclueId === 'FC-MEN-26-001' ||
+    (normalized.name && normalized.name.toLowerCase().includes('rajat') && normalized.name.toLowerCase().includes('pithadia'))
+  ) {
+    return {
+      ...normalized,
+      id: 'user_men_26_001',
+      forenclueId: 'FC-MEN-26-001',
+      name: 'Rajat Pithadia',
+      email: 'rajat.pithadia@forenclue.in',
+      role: 'MENTOR',
+      department: 'Mentors',
+      designation: 'Senior Forensic Mentor & Advisory Lead'
+    };
+  }
+  if (
+    normalized.id === 'user_emp_26_004' ||
+    normalized.forenclueId === 'FC-EMP-26-004' ||
+    (normalized.name && normalized.name.toLowerCase().includes('pranav') && normalized.name.toLowerCase().includes('kale'))
+  ) {
+    return {
+      ...normalized,
+      id: normalized.id || 'user_emp_26_004',
+      forenclueId: 'FC-EMP-26-004',
+      name: 'Pranav Kale',
+      email: normalized.email || 'pranav.kale@forenclue.in',
+      role: 'SUPER_ADMIN',
+      designation: normalized.designation || 'Super Administrator'
+    };
+  }
   return normalized;
+}
+
+export function deduplicateUserList(users: FirestoreUser[]): FirestoreUser[] {
+  const seenForenclueIds = new Set<string>();
+  const seenNames = new Set<string>();
+  let seenRajat = false;
+  let seenPranav = false;
+
+  return users.filter(u => {
+    if (!u || !u.name) return false;
+    const nameLower = u.name.trim().toLowerCase();
+    const isRajat = nameLower.includes('rajat') || (u.forenclueId || '').toUpperCase().includes('MEN-26-001');
+    const isPranav = nameLower.includes('pranav') || (u.forenclueId || '').toUpperCase().includes('EMP-26-004');
+
+    if (isRajat) {
+      if (seenRajat) return false;
+      seenRajat = true;
+      return true;
+    }
+
+    if (isPranav) {
+      if (seenPranav) return false;
+      seenPranav = true;
+      return true;
+    }
+
+    const fcIdUpper = (u.forenclueId || '').trim().toUpperCase();
+    if (fcIdUpper && seenForenclueIds.has(fcIdUpper)) return false;
+    if (nameLower && seenNames.has(nameLower)) return false;
+
+    if (fcIdUpper) seenForenclueIds.add(fcIdUpper);
+    if (nameLower) seenNames.add(nameLower);
+
+    return true;
+  });
 }
 
 export async function fetchAllUsers(): Promise<FirestoreUser[]> {
@@ -1080,16 +1189,18 @@ export async function fetchAllUsers(): Promise<FirestoreUser[]> {
     if (snap.empty) {
       await ensureDefaultFirestoreSeed();
       const freshSnap = await getDocs(usersCol);
-      return freshSnap.docs
+      const mapped = freshSnap.docs
         .map(d => normalizeUserRecord({ ...d.data(), id: d.id } as FirestoreUser))
         .filter(u => Boolean(u && u.id) && !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
+      return deduplicateUserList(mapped);
     }
-    return snap.docs
+    const mapped = snap.docs
       .map(d => {
         const { password: _, ...rest } = d.data() as FirestoreUser;
         return normalizeUserRecord({ ...rest, id: d.id } as FirestoreUser);
       })
       .filter(u => Boolean(u && u.id) && !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
+    return deduplicateUserList(mapped);
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'users');
     return [];
@@ -1105,7 +1216,7 @@ export function subscribeToUsers(callback: (users: FirestoreUser[]) => void): Un
         return normalizeUserRecord({ ...rest, id: d.id } as FirestoreUser);
       })
       .filter(u => Boolean(u && u.id) && !isPurvaUser(u) && u.forenclueId !== 'FC-EMP-2026-005' && u.id !== 'user_emp_005');
-    callback(usersList);
+    callback(deduplicateUserList(usersList));
   }, (error) => {
     handleFirestoreError(error, OperationType.LIST, 'users');
   });

@@ -206,18 +206,46 @@ export const Teams = () => {
   });
   const effectiveSuperAdminMentors = superAdminMentors.length > 0 ? superAdminMentors : [
     {
-      id: 'emp_001',
+      id: 'user_admin_001',
       forenclueId: 'FC-EMP-2026-001',
       name: 'Tejas Tapse',
       email: 'ttapse12@gmail.com',
       role: 'SUPER_ADMIN',
       designation: 'Founder & Lead Forensic Specialist | Executive Mentor',
       active: true
+    },
+    {
+      id: 'user_emp_002',
+      forenclueId: 'FC-EMP-2026-002',
+      name: 'Mrunmayee Bodhe',
+      email: 'mrunmayee.bodhe@forenclue.in',
+      role: 'SUPER_ADMIN',
+      designation: 'Super Administrator & Research Lead Mentor',
+      active: true
+    },
+    {
+      id: 'user_emp_003',
+      forenclueId: 'FC-EMP-2026-003',
+      name: 'Ayush Gaikwad',
+      email: 'ayush.gaikwad@forenclue.in',
+      role: 'SUPER_ADMIN',
+      designation: 'Super Administrator & Case Study Lead Mentor',
+      active: true
+    },
+    {
+      id: 'user_emp_26_004',
+      forenclueId: 'FC-EMP-26-004',
+      name: 'Pranav Kale',
+      email: 'pranav.kale@forenclue.in',
+      role: 'SUPER_ADMIN',
+      designation: 'Super Administrator',
+      active: true
     }
   ];
 
   const getDeptMembers = (deptName: string): TeamMember[] => {
     const isCampusAmbassadors = deptName.toLowerCase().includes('campus ambassador');
+    const isMentorsDept = deptName.trim().toLowerCase().includes('mentor');
     const deptInfo = departments.find(d => d.name.toLowerCase() === deptName.toLowerCase());
     const seen = new Set<string>();
 
@@ -255,10 +283,33 @@ export const Teams = () => {
       return false;
     });
 
-    if (deptName.trim().toLowerCase().includes('mentor')) {
-      const hasRajat = filteredList.some(m => (m.forenclueId || '').toUpperCase() === 'FC-MEN-26-001' || (m.name || '').toLowerCase().includes('rajat'));
-      if (!hasRajat) {
-        filteredList.push({
+    if (isMentorsDept) {
+      // Deduplicate Rajat Pithadia strictly: only 1 entry with canonical ID FC-MEN-26-001
+      let rajatFound = false;
+      const mentorsList: TeamMember[] = [];
+      for (const m of filteredList) {
+        const isRajat = (m.name || '').toLowerCase().includes('rajat') || (m.forenclueId || '').toUpperCase().includes('MEN-26-001') || m.id === 'user_men_26_001';
+        if (isRajat) {
+          if (!rajatFound) {
+            rajatFound = true;
+            mentorsList.push({
+              id: 'user_men_26_001',
+              forenclueId: 'FC-MEN-26-001',
+              name: 'Rajat Pithadia',
+              email: 'rajat.pithadia@forenclue.in',
+              role: 'MENTOR',
+              department: 'Mentors',
+              designation: 'Senior Forensic Mentor & Advisory Lead',
+              active: true
+            });
+          }
+        } else {
+          mentorsList.push(m);
+        }
+      }
+
+      if (!rajatFound) {
+        mentorsList.push({
           id: 'user_men_26_001',
           forenclueId: 'FC-MEN-26-001',
           name: 'Rajat Pithadia',
@@ -269,6 +320,7 @@ export const Teams = () => {
           active: true
         });
       }
+      return mentorsList;
     }
 
     return filteredList;

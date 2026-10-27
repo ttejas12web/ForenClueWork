@@ -130,6 +130,12 @@ const DEPARTMENT_MENTORS: Record<string, DepartmentMentor> = {
     forenclueId: 'FC-EMP-2026-001',
     code: 'CA',
     color: 'bg-gradient-to-tr from-amber-500 via-amber-600 to-orange-600'
+  },
+  'Mentors': {
+    name: 'Rajat Pithadia',
+    forenclueId: 'FC-MEN-26-001',
+    code: 'MN',
+    color: 'bg-teal-600'
   }
 };
 
