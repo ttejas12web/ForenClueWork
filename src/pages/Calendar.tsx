@@ -19,12 +19,19 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { apiFetch } from '../lib/api';
-import { subscribeToTasks } from '../lib/firestoreService';
+import { 
+  subscribeToTasks, 
+  subscribeToEvents, 
+  createFirestoreEvent, 
+  deleteFirestoreEvent 
+} from '../lib/firestoreService';
 import { TaskAllowedCalendar, StandardWorkspaceEvent, CalendarTaskItem } from '../components/TaskAllowedCalendar';
 
 export const Calendar: React.FC = () => {
   const { user, token } = useAuthStore();
   const isAdmin = user?.role === 'SUPER_ADMIN';
+  const isMentor = user?.role === 'MENTOR';
+  const canManageEvents = isAdmin || isMentor;
 
   const [activeTab, setActiveTab] = useState<'CALENDAR_VIEW' | 'EVENTS_GRID' | 'MY_TASKS'>('CALENDAR_VIEW');
   
@@ -66,10 +73,20 @@ export const Calendar: React.FC = () => {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Persist Events
+  // Persist Events locally as cache
   useEffect(() => {
     localStorage.setItem('forenclue_workspace_events', JSON.stringify(events));
   }, [events]);
+
+  // Subscribe to real-time events from Firestore
+  useEffect(() => {
+    const unsubscribe = subscribeToEvents((firestoreEvents) => {
+      if (firestoreEvents && firestoreEvents.length > 0) {
+        setEvents(firestoreEvents as StandardWorkspaceEvent[]);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Fetch tasks with real-time Firestore listener
   useEffect(() => {
@@ -114,39 +131,74 @@ export const Calendar: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
-  const handleCreateEvent = (e: React.FormEvent) => {
+  const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !date.trim()) {
       setError('Please provide event title and standard date.');
       return;
     }
 
-    const newEvent: StandardWorkspaceEvent = {
-      id: `evt-${Date.now()}`,
-      title: title.trim(),
-      date: date.trim(),
-      time: time.trim() || '10:00 AM - 11:30 AM IST',
-      location: location.trim() || 'Virtual Workspace Room',
-      attendees: attendees.trim() || 'All Workspace Members',
-      category: category,
-      description: description.trim() || undefined
-    };
+    try {
+      const created = await createFirestoreEvent({
+        title: title.trim(),
+        date: date.trim(),
+        time: time.trim() || '10:00 AM - 11:30 AM IST',
+        location: location.trim() || 'Virtual Workspace Room',
+        attendees: attendees.trim() || 'All Workspace Members',
+        category: category,
+        description: description.trim() || undefined,
+        createdBy: user?.id ? String(user.id) : '',
+        creatorName: user?.name || (isMentor ? 'Mentor' : 'Super Admin'),
+        creatorRole: user?.role || 'MENTOR'
+      });
 
-    setEvents([newEvent, ...events]);
-    setTitle('');
-    setDate(getTodayDateString());
-    setTime('10:00 AM - 11:30 AM IST');
-    setLocation('Virtual Room Alpha');
-    setAttendees('All Workspace Members');
-    setDescription('');
-    setError('');
-    setShowModal(false);
-    setSuccessMsg(`Scheduled "${newEvent.title}" successfully.`);
-    setTimeout(() => setSuccessMsg(''), 4000);
+      setEvents(prev => [created as StandardWorkspaceEvent, ...prev.filter(x => x.id !== created.id)]);
+      setTitle('');
+      setDate(getTodayDateString());
+      setTime('10:00 AM - 11:30 AM IST');
+      setLocation('Virtual Room Alpha');
+      setAttendees('All Workspace Members');
+      setDescription('');
+      setError('');
+      setShowModal(false);
+      setSuccessMsg(`Scheduled "${created.title}" successfully.`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err: any) {
+      console.warn('Firestore event save fallback to local:', err);
+      const newEvent: StandardWorkspaceEvent = {
+        id: `evt-${Date.now()}`,
+        title: title.trim(),
+        date: date.trim(),
+        time: time.trim() || '10:00 AM - 11:30 AM IST',
+        location: location.trim() || 'Virtual Workspace Room',
+        attendees: attendees.trim() || 'All Workspace Members',
+        category: category,
+        description: description.trim() || undefined
+      };
+
+      setEvents(prev => [newEvent, ...prev]);
+      setTitle('');
+      setDate(getTodayDateString());
+      setTime('10:00 AM - 11:30 AM IST');
+      setLocation('Virtual Room Alpha');
+      setAttendees('All Workspace Members');
+      setDescription('');
+      setError('');
+      setShowModal(false);
+      setSuccessMsg(`Scheduled "${newEvent.title}" successfully.`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    }
   };
 
-  const handleDelete = (id: string | number) => {
+  const handleDelete = async (id: string | number) => {
     if (confirm('Are you sure you want to remove this scheduled workspace event?')) {
+      try {
+        if (typeof id === 'string' && !id.startsWith('evt-')) {
+          await deleteFirestoreEvent(id);
+        }
+      } catch (err) {
+        console.warn('Could not delete event from Firestore:', err);
+      }
       setEvents(events.filter(e => e.id !== id));
     }
   };
@@ -205,7 +257,7 @@ export const Calendar: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2">
-          {isAdmin && (
+          {canManageEvents && (
             <button
               id="btn-schedule-new-event"
               type="button"
@@ -331,7 +383,7 @@ export const Calendar: React.FC = () => {
                       }`}>
                         {event.category}
                       </span>
-                      {isAdmin && (
+                      {canManageEvents && (
                         <button
                           onClick={() => handleDelete(event.id)}
                           className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
@@ -447,7 +499,7 @@ export const Calendar: React.FC = () => {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                  ADMINISTRATIVE SCHEDULE
+                  {isMentor ? 'MENTOR EVENT SCHEDULE' : 'ADMINISTRATIVE SCHEDULE'}
                 </span>
                 <h3 className="text-base font-bold text-slate-900 mt-1">Schedule Workspace Event</h3>
               </div>

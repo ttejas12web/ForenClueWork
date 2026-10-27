@@ -175,6 +175,21 @@ export interface FirestoreAnnouncement {
   createdAt: string;
 }
 
+export interface FirestoreEvent {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  attendees: string;
+  category: 'Meeting' | 'Briefing' | 'Webinar' | 'Orientation' | 'Case Review' | 'Workshop';
+  description?: string;
+  createdBy?: string;
+  creatorName?: string;
+  creatorRole?: string;
+  createdAt: string;
+}
+
 export interface FirestoreNotification {
   id: string;
   userId: string;
@@ -235,6 +250,23 @@ export const SEED_USERS: FirestoreUser[] = [
     designation: 'Super Administrator & Case Study Lead Mentor',
     phone: '+91 98765 43212',
     bio: 'Executive Super Admin & Case Study Lead Mentor at ForenClue Workspace.',
+    isDefaultPassword: true,
+    tempPasswordChanged: false,
+    active: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'user_men_26_001',
+    forenclueId: 'FC-MEN-26-001',
+    name: 'Rajat Pithadia',
+    email: 'rajat.pithadia@forenclue.in',
+    password: 'Forenclue@2026',
+    role: 'MENTOR',
+    department: 'Mentors',
+    designation: 'Senior Forensic Mentor & Advisory Lead',
+    phone: '+91 98765 43213',
+    bio: 'Senior Mentor for forensic investigations, student mentorship, and domain advisory at ForenClue.',
     isDefaultPassword: true,
     tempPasswordChanged: false,
     active: true,
@@ -730,6 +762,21 @@ export async function ensureDefaultFirestoreSeed(): Promise<void> {
               });
             }
           }
+
+          // Enforce Mentors department for Rajat Pithadia
+          if (u.id === 'user_men_26_001' || u.forenclueId === 'FC-MEN-26-001') {
+            if (existingData.department !== 'Mentors' || existingData.role !== 'MENTOR') {
+              await updateDoc(userDocRef, {
+                name: 'Rajat Pithadia',
+                forenclueId: 'FC-MEN-26-001',
+                email: 'rajat.pithadia@forenclue.in',
+                department: 'Mentors',
+                role: 'MENTOR',
+                designation: 'Senior Forensic Mentor & Advisory Lead',
+                active: true
+              });
+            }
+          }
         }
       } catch (docErr) {
         console.warn(`User seed write skipped for ${u.id}:`, docErr);
@@ -830,6 +877,18 @@ export function findMatchingUser(users: FirestoreUser[], identifier: string): Fi
         return uFc.includes('VOL') && (uDigits.endsWith(digits) || uDigits === digits);
       });
       if (matchVol) return matchVol;
+    }
+  }
+
+  if (alphaNum.startsWith('men') || alphaNum.startsWith('fcmen')) {
+    const digits = alphaNum.replace(/\D/g, '');
+    if (digits) {
+      const matchMen = filteredUsers.find(u => {
+        const uFc = (u.forenclueId || '').toUpperCase();
+        const uDigits = uFc.replace(/\D/g, '');
+        return uFc.includes('MEN') && (uDigits.endsWith(digits) || uDigits === digits);
+      });
+      if (matchMen) return matchMen;
     }
   }
 
@@ -2073,6 +2132,64 @@ export async function deleteFirestoreAnnouncement(annId: string): Promise<void> 
     await deleteDoc(doc(db, 'announcements', annId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `announcements/${annId}`);
+    throw error;
+  }
+}
+
+// ----------------------------------------------------
+// WORKSPACE EVENTS SERVICE (CALENDAR)
+// ----------------------------------------------------
+export function subscribeToEvents(callback: (events: FirestoreEvent[]) => void): Unsubscribe {
+  const evtCol = collection(db, 'events');
+  return onSnapshot(evtCol, (snap) => {
+    const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as FirestoreEvent));
+    list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    callback(list);
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, 'events');
+  });
+}
+
+export async function createFirestoreEvent(data: Partial<FirestoreEvent>): Promise<FirestoreEvent> {
+  try {
+    const evtCol = collection(db, 'events');
+    const docData: Omit<FirestoreEvent, 'id'> = {
+      title: data.title || '',
+      date: data.date || new Date().toISOString().split('T')[0],
+      time: data.time || '10:00 AM - 11:30 AM IST',
+      location: data.location || 'Virtual Room Alpha',
+      attendees: data.attendees || 'All Workspace Members',
+      category: data.category || 'Briefing',
+      description: data.description || '',
+      createdBy: data.createdBy || '',
+      creatorName: data.creatorName || '',
+      creatorRole: data.creatorRole || '',
+      createdAt: new Date().toISOString(),
+    };
+
+    const docRef = await addDoc(evtCol, docData);
+
+    // Asynchronously dispatch background Web Push to all registered devices
+    dispatchBackgroundPush({
+      userId: 'ALL',
+      title: `Workspace Event: ${docData.title}`,
+      body: `${docData.date} • ${docData.time} - ${docData.location}`,
+      url: '/calendar',
+      tag: `evt-${docRef.id}`
+    }).catch(err => console.warn('Background push dispatch for event failed:', err));
+
+    return { ...docData, id: docRef.id };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'events');
+    throw error;
+  }
+}
+
+export async function deleteFirestoreEvent(eventId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'events', eventId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `events/${eventId}`);
     throw error;
   }
 }

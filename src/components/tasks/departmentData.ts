@@ -113,6 +113,20 @@ export const CANONICAL_DEPARTMENTS: DepartmentMetadata[] = [
     desc: 'National student outreach, university relations, forensic masterclass promotions & campus initiatives.'
   },
   {
+    id: 'mentors',
+    name: 'Mentors',
+    code: 'MN',
+    mentorName: 'Rajat Pithadia',
+    mentorId: 'FC-MEN-26-001',
+    mentorEmail: 'rajat.pithadia@forenclue.in',
+    color: 'teal',
+    badgeBg: 'bg-teal-50 text-teal-800 border-teal-200',
+    badgeText: 'text-teal-700',
+    borderCol: 'border-teal-200',
+    accentBg: 'bg-teal-600',
+    desc: 'Senior forensic mentorship, specialized advisory, research guidance, and deliverable review.'
+  },
+  {
     id: 'executive-admin',
     name: 'Executive & Administration',
     code: 'EA',
@@ -131,6 +145,7 @@ export const CANONICAL_DEPARTMENTS: DepartmentMetadata[] = [
 export function normalizeDepartmentName(dept?: string | null): string {
   if (!dept) return 'Case Studies';
   const clean = dept.trim().toLowerCase();
+  if (clean.includes('mentor')) return 'Mentors';
   if (clean.includes('case stud')) return 'Case Studies';
   if (clean.includes('research')) return 'Research';
   if (clean.includes('social media')) return 'Social Media Management';

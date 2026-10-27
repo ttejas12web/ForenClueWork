@@ -131,6 +131,7 @@ export const DEPARTMENTS = [
   'Research',
   'Social Media Management',
   'Event Management',
+  'Mentors',
   'Events & Management',
   'Cyber & Digital Forensics',
   'Creative & Graphics',

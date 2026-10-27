@@ -11,6 +11,8 @@ import {
 export const Announcements = () => {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'SUPER_ADMIN';
+  const isMentor = user?.role === 'MENTOR';
+  const canPost = isAdmin || isMentor;
 
   const [announcements, setAnnouncements] = useState<FirestoreAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,10 +43,14 @@ export const Announcements = () => {
     setError('');
 
     try {
+      const authorTitle = user?.name 
+        ? `${user.name} (${user.role === 'MENTOR' ? 'Mentor' : 'Super Admin'})` 
+        : (user?.role === 'MENTOR' ? 'Mentor' : 'Super Administrator');
+
       await createFirestoreAnnouncement({
         title: title.trim(),
         content: content.trim(),
-        author: user?.name || 'Super Administrator',
+        author: authorTitle,
         authorId: user?.id ? String(user.id) : '',
         priority: priority
       });
@@ -81,7 +87,7 @@ export const Announcements = () => {
           </p>
         </div>
 
-        {isAdmin && (
+        {canPost && (
           <button
             type="button"
             onClick={() => setShowModal(true)}
@@ -100,11 +106,11 @@ export const Announcements = () => {
           </div>
           <h3 className="text-sm font-bold text-slate-900">No Announcements Posted</h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            {isAdmin 
+            {canPost 
               ? 'Click "Post Notice" above to broadcast operational announcements to all workspace members.' 
-              : 'No workspace announcements have been published by administration yet.'}
+              : 'No workspace announcements have been published yet.'}
           </p>
-          {isAdmin && (
+          {canPost && (
             <button
               type="button"
               onClick={() => setShowModal(true)}
@@ -133,10 +139,10 @@ export const Announcements = () => {
                   </span>
                 </div>
 
-                {isAdmin && (
+                {(canPost || ann.authorId === String(user?.id)) && (
                   <button
                     onClick={() => handleDelete(ann.id)}
-                    className="text-slate-400 hover:text-rose-600 text-xs"
+                    className="text-slate-400 hover:text-rose-600 text-xs p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
                     title="Delete announcement"
                   >
                     <X className="h-4 w-4" />
@@ -163,7 +169,12 @@ export const Announcements = () => {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">Post Workspace Announcement</h3>
+              <div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                  {isMentor ? 'MENTOR ANNOUNCEMENT' : 'OFFICIAL NOTICE'}
+                </span>
+                <h3 className="text-base font-bold text-slate-900 mt-1">Post Workspace Announcement</h3>
+              </div>
               <button 
                 type="button" 
                 onClick={() => setShowModal(false)}

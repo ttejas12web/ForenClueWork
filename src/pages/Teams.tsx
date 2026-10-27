@@ -132,6 +132,18 @@ export const Teams = () => {
       isSpecial: true,
       tag: 'Executive Super Admin Mentorship'
     },
+    { 
+      name: 'Mentors', 
+      desc: 'Senior forensic mentorship, specialized advisory, research oversight, domain guidance, and student counseling.', 
+      code: 'MN', 
+      mentorName: 'Rajat Pithadia',
+      mentorId: 'FC-MEN-26-001',
+      mentorEmail: 'rajat.pithadia@forenclue.in',
+      color: 'bg-teal-600',
+      badgeColor: 'bg-teal-50 text-teal-800 border-teal-200',
+      isSpecial: true,
+      tag: 'Forensic Mentorship'
+    },
   ];
 
   const loadMembersData = async () => {
@@ -209,7 +221,7 @@ export const Teams = () => {
     const deptInfo = departments.find(d => d.name.toLowerCase() === deptName.toLowerCase());
     const seen = new Set<string>();
 
-    return members.filter(m => {
+    const filteredList = members.filter(m => {
       if (!m || !m.name) return false;
       const nameLower = (m.name || '').toLowerCase();
       if (nameLower.includes('purva') || nameLower.includes('bhawsar') || nameLower.includes('hawser') || m.forenclueId === 'FC-EMP-2026-004' || m.id === 'user_emp_004') return false;
@@ -224,6 +236,7 @@ export const Teams = () => {
         (targetDeptClean.includes('event') && userDeptClean.includes('event')) ||
         (targetDeptClean.includes('social media') && userDeptClean.includes('social media')) ||
         (targetDeptClean.includes('creative') && userDeptClean.includes('creative')) ||
+        (targetDeptClean.includes('mentor') && (userDeptClean.includes('mentor') || m.role === 'MENTOR' || (m.forenclueId && m.forenclueId.toUpperCase().includes('MEN')))) ||
         (isCampusAmbassadors && (userDeptClean.includes('campus ambassador') || userDeptClean.includes('ambassador')));
 
       // 2. Role match for Campus Ambassador
@@ -241,6 +254,24 @@ export const Teams = () => {
       }
       return false;
     });
+
+    if (deptName.trim().toLowerCase().includes('mentor')) {
+      const hasRajat = filteredList.some(m => (m.forenclueId || '').toUpperCase() === 'FC-MEN-26-001' || (m.name || '').toLowerCase().includes('rajat'));
+      if (!hasRajat) {
+        filteredList.push({
+          id: 'user_men_26_001',
+          forenclueId: 'FC-MEN-26-001',
+          name: 'Rajat Pithadia',
+          email: 'rajat.pithadia@forenclue.in',
+          role: 'MENTOR',
+          department: 'Mentors',
+          designation: 'Senior Forensic Mentor & Advisory Lead',
+          active: true
+        });
+      }
+    }
+
+    return filteredList;
   };
 
   const activeDeptData = departments.find(d => d.name === selectedDept) || departments[0];

@@ -157,6 +157,11 @@ export const TopBar: React.FC<TopBarProps> = ({ mobileMenuOpen, setMobileMenuOpe
               <Crown className="h-3 w-3 text-amber-500" />
               <span className="font-bold text-amber-700">SUPER ADMIN</span>
             </>
+          ) : user?.role === 'MENTOR' ? (
+            <>
+              <Sparkles className="h-3 w-3 text-purple-600" />
+              <span className="font-bold text-purple-700">MENTOR</span>
+            </>
           ) : (
             <>
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />

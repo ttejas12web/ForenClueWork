@@ -53,6 +53,7 @@ export const AdminConsole = () => {
   const [formLoading, setFormLoading] = useState(false);
 
   const departmentsList = [
+    'Mentors',
     'Creative & Graphics',
     'Case Studies',
     'Case Study',

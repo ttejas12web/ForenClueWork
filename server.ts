@@ -5,6 +5,7 @@ import multer from 'multer';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer as createViteServer } from 'vite';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import webpush from 'web-push';
@@ -673,17 +674,25 @@ async function startServer() {
   if (process.env.NODE_ENV === 'production' && existsSync(resolve(distPath, 'index.html'))) {
     app.use(express.static(distPath));
     app.get('*', (_req, res) => res.sendFile(resolve(distPath, 'index.html')));
+    app.listen(port, '0.0.0.0', () => {
+      console.log(`ForenClue workspace server started on port ${port}.`);
+    });
   } else {
+    const httpServer = createHttpServer(app);
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: {
+          server: httpServer
+        }
+      },
       appType: 'spa'
     });
     app.use(vite.middlewares);
+    httpServer.listen(port, '0.0.0.0', () => {
+      console.log(`ForenClue workspace server started on port ${port}.`);
+    });
   }
-
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`ForenClue workspace server started on port ${port}.`);
-  });
 }
 
 startServer().catch(error => {

@@ -143,6 +143,25 @@
         "createdAt": { "type": "string" }
       },
       "required": ["userId", "title", "message"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "Workspace calendar event or milestone",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "date": { "type": "string", "maxLength": 50 },
+        "time": { "type": "string", "maxLength": 100 },
+        "location": { "type": "string", "maxLength": 200 },
+        "attendees": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "enum": ["Meeting", "Briefing", "Webinar", "Orientation", "Case Review", "Workshop"] },
+        "description": { "type": "string", "maxLength": 2000 },
+        "createdBy": { "type": "string" },
+        "creatorRole": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "date", "category"]
     }
   },
   "firestore": {
@@ -165,6 +184,10 @@
     "/announcements/{announcementId}": {
       "schema": "Announcement",
       "description": "Workspace bulletin announcements"
+    },
+    "/events/{eventId}": {
+      "schema": "Event",
+      "description": "Workspace calendar events"
     },
     "/notifications/{notificationId}": {
       "schema": "Notification",
