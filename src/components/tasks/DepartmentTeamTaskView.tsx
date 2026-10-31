@@ -23,6 +23,7 @@ import {
   Check
 } from 'lucide-react';
 import { WorkspaceTask } from '../../pages/Tasks';
+import { sortTasksNewestFirst } from '../../lib/firestoreService';
 import { CANONICAL_DEPARTMENTS, normalizeDepartmentName, getDepartmentMetadata, DepartmentMetadata } from './departmentData';
 
 export interface WorkspaceMember {
@@ -70,8 +71,10 @@ export const DepartmentTeamTaskView: React.FC<DepartmentTeamTaskViewProps> = ({
   // Compute departmental statistics & grouped data
   const departmentalData = useMemo(() => {
     return CANONICAL_DEPARTMENTS.map(dept => {
-      // Find all tasks mapped to this department
-      const deptTasks = tasks.filter(t => normalizeDepartmentName(t.department) === dept.name);
+      // Find all tasks mapped to this department (sorted with newly allotted tasks first)
+      const deptTasks = sortTasksNewestFirst(
+        tasks.filter(t => normalizeDepartmentName(t.department) === dept.name)
+      );
       
       // Find all members mapped to this department
       const deptMembers = members.filter(m => normalizeDepartmentName(m.department) === dept.name);

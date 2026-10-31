@@ -54,6 +54,8 @@ import {
   approveTaskExtension,
   disapproveTaskExtension,
   cancelTaskExtensionRequest,
+  sortTasksNewestFirst,
+  getTaskAllotmentTimestamp,
   TaskExtensionRequest,
   FirestoreTask,
   FirestoreUser
@@ -105,6 +107,7 @@ export interface WorkspaceTask {
   reviewedByName?: string | null;
   reviewFeedback?: string | null;
   extensionRequest?: TaskExtensionRequest | null;
+  allottedAt?: string;
   createdAt: string;
   updatedAt: string;
   assignedUserName?: string;
@@ -915,31 +918,35 @@ export const Tasks: React.FC = () => {
     });
   }, [tasks]);
 
-  // Client-side search and department filtering
-  const filteredTasks = tasks.filter(t => {
-    // If extension filter is active
-    if (showExtensionsOnly && t.extensionRequest?.status !== 'PENDING') {
-      return false;
-    }
-
-    // Filter by selected department if not ALL
-    if (selectedDepartment !== 'ALL') {
-      const taskDeptNorm = normalizeDepartmentName(t.department);
-      if (taskDeptNorm !== selectedDepartment) {
+  // Client-side search and department filtering (sorted with newly allotted tasks first)
+  const filteredTasks = useMemo(() => {
+    const matching = tasks.filter(t => {
+      // If extension filter is active
+      if (showExtensionsOnly && t.extensionRequest?.status !== 'PENDING') {
         return false;
       }
-    }
 
-    const query = searchQuery.toLowerCase();
-    const matchesQuery = 
-      t.title.toLowerCase().includes(query) ||
-      (t.description && t.description.toLowerCase().includes(query)) ||
-      (t.assignedUserName && t.assignedUserName.toLowerCase().includes(query)) ||
-      (t.assignedUserForenclueId && t.assignedUserForenclueId.toLowerCase().includes(query)) ||
-      (t.department && t.department.toLowerCase().includes(query));
+      // Filter by selected department if not ALL
+      if (selectedDepartment !== 'ALL') {
+        const taskDeptNorm = normalizeDepartmentName(t.department);
+        if (taskDeptNorm !== selectedDepartment) {
+          return false;
+        }
+      }
 
-    return matchesQuery;
-  });
+      const query = searchQuery.toLowerCase();
+      const matchesQuery = 
+        t.title.toLowerCase().includes(query) ||
+        (t.description && t.description.toLowerCase().includes(query)) ||
+        (t.assignedUserName && t.assignedUserName.toLowerCase().includes(query)) ||
+        (t.assignedUserForenclueId && t.assignedUserForenclueId.toLowerCase().includes(query)) ||
+        (t.department && t.department.toLowerCase().includes(query));
+
+      return matchesQuery;
+    });
+
+    return sortTasksNewestFirst(matching);
+  }, [tasks, showExtensionsOnly, selectedDepartment, searchQuery]);
 
   // Calculate quick stats
   const totalTasks = tasks.length;
@@ -1349,7 +1356,7 @@ export const Tasks: React.FC = () => {
               {getDepartmentMetadata(selectedDepartment).code}
             </div>
             <div>
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-bold text-slate-900">
                   {selectedDepartment}
                 </span>

@@ -80,6 +80,7 @@ export interface FirestoreTask {
   reviewedByName?: string | null;
   reviewFeedback?: string | null;
   extensionRequest?: TaskExtensionRequest | null;
+  allottedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1351,6 +1352,32 @@ export function isTaskAssignedToMember(
   return false;
 }
 
+export function getTaskAllotmentTimestamp(task: any): number {
+  if (!task) return 0;
+  const raw = task.allottedAt || task.createdAt || task.updatedAt;
+  if (!raw) return 0;
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'object' && typeof raw.toMillis === 'function') {
+    return raw.toMillis();
+  }
+  if (typeof raw === 'object' && typeof raw.seconds === 'number') {
+    return raw.seconds * 1000;
+  }
+  const parsed = Date.parse(String(raw));
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+export function sortTasksNewestFirst<T extends { createdAt?: any; updatedAt?: any; allottedAt?: any }>(tasks: T[]): T[] {
+  return [...tasks].sort((a, b) => {
+    const timeB = getTaskAllotmentTimestamp(b);
+    const timeA = getTaskAllotmentTimestamp(a);
+    if (timeB !== timeA) return timeB - timeA;
+    const updB = b?.updatedAt ? Date.parse(String(b.updatedAt)) || 0 : 0;
+    const updA = a?.updatedAt ? Date.parse(String(a.updatedAt)) || 0 : 0;
+    return updB - updA;
+  });
+}
+
 export async function fetchAllTasks(
   assignedUserId?: string, 
   userRole?: string,
@@ -1361,7 +1388,7 @@ export async function fetchAllTasks(
   try {
     const tasksCol = collection(db, 'tasks');
     const snap = await getDocs(tasksCol);
-    const all = snap.docs.map(d => ({ ...d.data(), id: d.id } as FirestoreTask));
+    const all = sortTasksNewestFirst(snap.docs.map(d => ({ ...d.data(), id: d.id } as FirestoreTask)));
 
     const isPrivileged = userRole === 'SUPER_ADMIN' || userRole === 'SUPER ADMIN' || userRole === 'ADMIN';
     if (isPrivileged || (!assignedUserId && !userForenclueId && !userEmail && !userName)) {
@@ -1389,7 +1416,7 @@ export function subscribeToTasks(
 ): Unsubscribe {
   const tasksCol = collection(db, 'tasks');
   return onSnapshot(tasksCol, (snap) => {
-    let all = snap.docs.map(d => ({ ...d.data(), id: d.id } as FirestoreTask));
+    let all = sortTasksNewestFirst(snap.docs.map(d => ({ ...d.data(), id: d.id } as FirestoreTask)));
     
     const isPrivileged = userRole === 'SUPER_ADMIN' || userRole === 'SUPER ADMIN' || userRole === 'ADMIN';
     if (!isPrivileged && (assignedUserId || userForenclueId || userEmail || userName)) {
@@ -1409,6 +1436,7 @@ export function subscribeToTasks(
 export async function createFirestoreTask(taskData: Partial<FirestoreTask>): Promise<FirestoreTask> {
   try {
     const tasksCol = collection(db, 'tasks');
+    const nowIso = new Date().toISOString();
     const docData = {
       title: taskData.title || 'Untitled Task',
       description: taskData.description || '',
@@ -1428,8 +1456,12 @@ export async function createFirestoreTask(taskData: Partial<FirestoreTask>): Pro
       deliverableNotes: '',
       deliverableLink: '',
       deliverableAttachmentUrl: '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      referenceAttachmentUrl: taskData.referenceAttachmentUrl || '',
+      referenceAttachmentName: taskData.referenceAttachmentName || '',
+      referenceAttachmentType: taskData.referenceAttachmentType || '',
+      allottedAt: nowIso,
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
     const docRef = await addDoc(tasksCol, docData);
@@ -1454,13 +1486,16 @@ export async function createFirestoreTask(taskData: Partial<FirestoreTask>): Pro
 export async function updateFirestoreTask(taskId: string, updates: Partial<FirestoreTask>): Promise<void> {
   try {
     const taskDocRef = doc(db, 'tasks', taskId);
+    const nowIso = new Date().toISOString();
+    let extraUpdates: Partial<FirestoreTask> = {};
     
-    // Check if assignedTo has changed
+    // Check if assignedTo has changed or task is being re-allotted
     if (updates.assignedTo) {
       const snap = await getDoc(taskDocRef);
       if (snap.exists()) {
         const existingData = snap.data() as FirestoreTask;
         if (existingData.assignedTo !== updates.assignedTo) {
+           extraUpdates.allottedAt = nowIso;
            await createNotification({
              userId: updates.assignedTo,
              title: 'Task Assigned',
@@ -1474,7 +1509,8 @@ export async function updateFirestoreTask(taskId: string, updates: Partial<Fires
 
     await updateDoc(taskDocRef, {
       ...updates,
-      updatedAt: new Date().toISOString(),
+      ...extraUpdates,
+      updatedAt: nowIso,
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
